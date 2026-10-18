@@ -80,7 +80,7 @@ WindowsではPython 3.11にもあるlstatのst_file_attributesを使い、3.12�
 Python >=3.11、追加依存なしのCPU試験:
 
 ```powershell
-python -m unittest discover -s tests/unit -p test_handoff.py -v
+python -m unittest discover -s tests/unit -p "test_handoff*.py" -v
 ```
 
 同じ試験は通常のpytestにも参加する。匿名例は

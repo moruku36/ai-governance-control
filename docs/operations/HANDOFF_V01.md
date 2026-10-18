@@ -162,7 +162,7 @@ is outside its threat model. It is not a sandbox or a secret-safety guarantee.
 With Python >=3.11 and no third-party dependencies:
 
 ```powershell
-python -m unittest discover -s tests/unit -p test_handoff.py -v
+python -m unittest discover -s tests/unit -p "test_handoff*.py" -v
 ```
 
 The same unittest cases participate in the normal pytest suite. Negative fixtures
