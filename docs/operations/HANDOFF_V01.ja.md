@@ -1,7 +1,7 @@
 # ローカル成果物受渡し v0.1
 
 承認済み個人AIチーム計画の最初の小さな実装として、manifestと受け手側のbytes照合を追加した。
-AI Governance ControlはExperimental / MANUAL_ONLYのまま。外部agent、クラウド実行、model切替や保存サービスは追加しない。
+AI Governance ControlはExperimental / MANUAL_ONLYのまま。外部agent、クラウド実行、model切替や常駐の保存サービスは追加しない（基本の受信器はステートレスのままであり、任意のcoordinatorも呼出元が明示指定したローカルSQLiteファイルのみを使用する）。
 
 ## 手順
 
@@ -27,9 +27,28 @@ AI Governance ControlはExperimental / MANUAL_ONLYのまま。外部agent、ク�
    一時ファイルの後始末はbest effortで、失敗しても公開済みreceiptの成功や元の公開エラーを変更しない。
    trustとreceiptはpacketの外に置く。
    trusted recordの認証は既存の配送経路の責任であり、このローカルツールは認証しない。
+
+   **受信器の境界と再試行手順**:
+   - 受信器は完全に**ステートレス**であり、原子的なhard linkによる同一パスの排他作成（上書き拒否）のみを保証する。別パスでの重複排除や実行再送制御は上位coordinator（Control Plane/Dottie）の責務であり、受信器に新たな永続サービスや汎用dedupeは追加しない。
+   - 下記の任意のローカルcoordinatorは`(run_id, attempt_id)`と受領先パスの固定を実装する。上の単独受信器コマンドにはこのガードがないため、直接利用する呼出し元は一意なパスを管理する。
+   - exit 2（BLOCKED）はhashや検証の失敗だけでなく、既存受領先との衝突（二重作成拒絶）や公開失敗も表す。そのため終了コード単体で再試行可否を判断してはならず、エラー原因と固定受領先パスの状態を確認しなければならない。公開前に検証が失敗した場合は成功receiptは作成されない。coordinatorは以下の手順でのみ安全に再試行できる:
+     1. 具体的なエラー原因を確認し、指定受領先パスに成功receiptが存在しないことを確認する。
+     2. packet転送の補正や不足証拠の補充を行う。
+     3. 同じ固定受領先パスに対して再度照合を実行する。
+     既に成功receiptが存在する場合、coordinatorは同一パスに対して絶対に再試行してはならない（MUST NOT）。変更や後続実行には新しい正規の`attempt_id`と別受領先パスを割り当てなければならない。
 5. 固定candidateへの受入試験と必要な独立レビューを別に行う。実際の実行・取消・停止・引継ぎも別に照合する。
    本ツールはVERIFIED/COMPLETEへ進めない。送信側の`declared_status`を主張として残し、
    verificationはunknownとし、`next_step`を受領記録に残す。再送や二重起動は行わない。
+
+## 任意のローカルcoordinator（実験段階）
+
+`python -m orchestrator.coordinate_handoff --packet PACKET --trust TRUST_JSON --db PRIVATE_LEDGER_SQLITE --receipt-dir PRIVATE_RECEIPTS`で、明示指定したSQLite DBを使う。DBの親ディレクトリとprivate受領ディレクトリは事前に作る。運用台帳への統合には所有者の承認が必要。信頼記録は既存の認証済み経路から受け取り、packetの外に置く。このコマンド自体は配送元を認証せず、常駐サービス、遠隔agent、タスク状態更新も行わない。
+
+coordinatorは`handoff_receipt_reservations`テーブルのみを追加する。SQLiteの即時トランザクションでrun/attemptの組に対する受領先をSHA-256由来のファイル名に固定し、信頼記録全体のhashを保存する。同じattemptで信頼記録や受領ディレクトリが変われば拒否する。異なるattemptは別パスとなり、IDは生のパス部品にしない。既存の`task_states`は変更しない。このガードの対象は同じDBを共有する呼出し元のみ。
+
+受信器の従来のbytes検証と上書きしない公開を再利用する。検証失敗や予約後の中断なら同じ記録とパスで再試行できる。公開後、DB更新前に中断した場合は、DB内のランダムな予約鍵を用いて受領ファイル全体のMACを検証し、`COLLECTED`に戻す。異なるMACやpins、`COLLECTED`後の受領ファイル欠落は手動照合まで拒否し、上書きしない。hard linkが拒否されても予約は残り、成功受領にはしない。このMACはローカルDBとの整合性確認であり、送信元認証ではない。復旧試験はプロセス中断（クラッシュやkill）を対象としたものであり、停電時のディレクトリ永続化（ディレクトリfsync等）は未検証かつ保証外である。
+
+**Done条件**: `COLLECTED`は固定されたbytesを受領したことのみ示す。完了には認証済み配送、実ソースの来歴、独立した受入テストとレビュー、実行・取消状態の照合、本番統合の承認が別途必要。合成データによるオフライン試験と模擬公開はこれらを満たさない。
 
 ## 最小記録
 
@@ -61,7 +80,7 @@ WindowsではPython 3.11にもあるlstatのst_file_attributesを使い、3.12�
 Python >=3.11、追加依存なしのCPU試験:
 
 ```powershell
-python -m unittest discover -s tests/unit -p test_handoff.py -v
+python -m unittest discover -s tests/unit -p "test_handoff*.py" -v
 ```
 
 同じ試験は通常のpytestにも参加する。匿名例は
