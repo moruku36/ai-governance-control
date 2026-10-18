@@ -461,6 +461,43 @@ class HandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(HandoffError, "reparse point"):
             self.collect()
 
+    def test_receipt_boundary_retries_and_distinct_attempts(self):
+        trust_path = self.root / "trusted.json"
+        trust_path.write_text(json.dumps(self.trust), encoding="utf-8")
+        receipt_1 = self.root / "receipt-attempt-1.json"
+        receipt_2 = self.root / "receipt-attempt-2.json"
+
+        # 1. Successful attempt-1 collection and same-path replay rejection
+        args_1 = ["--packet", str(self.packet), "--trust", str(trust_path),
+                  "--receipt", str(receipt_1)]
+        with patch("sys.stdout"), patch("sys.stderr"):
+            self.assertEqual(main(args_1), 0)
+            published_1 = receipt_1.read_bytes()
+            # Same path replay refused: existing receipt is immutable
+            self.assertEqual(main(args_1), 2)
+            self.assertEqual(receipt_1.read_bytes(), published_1)
+
+        # 2. Distinct legitimate attempt-2: failure on mismatch -> no receipt -> repair -> success
+        self.manifest["attempt_id"] = "attempt-2"
+        trust_2 = self.write_packet()
+        trust_2_path = self.root / "trusted-attempt-2.json"
+        trust_2_path.write_text(json.dumps(trust_2), encoding="utf-8")
+        args_2 = ["--packet", str(self.packet), "--trust", str(trust_2_path),
+                  "--receipt", str(receipt_2)]
+
+        # Initial collection fails due to tampered output; no receipt published
+        (self.packet / "clarification.txt").write_bytes(b"tampered content")
+        with patch("sys.stdout"), patch("sys.stderr"):
+            self.assertEqual(main(args_2), 2)
+            self.assertFalse(receipt_2.exists())
+
+            # Coordinator confirms receipt absence, rectifies packet bytes, and retries at same path
+            (self.packet / "clarification.txt").write_bytes(self.contents["clarification.txt"])
+            self.assertEqual(main(args_2), 0)
+            self.assertTrue(receipt_2.exists())
+            receipt_data = json.loads(receipt_2.read_text(encoding="utf-8"))
+            self.assertEqual(receipt_data["attempt_id"], "attempt-2")
+
 
 if __name__ == "__main__":
     unittest.main()

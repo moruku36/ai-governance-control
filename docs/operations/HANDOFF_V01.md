@@ -39,6 +39,30 @@ service, model selection, cloud access, or new persistent storage is added.
    The trust and receipt files must be outside the packet. Authentication of the
    coordinator record belongs to the existing trusted delivery route, not this
    local utility. The API caller has the same trust responsibility.
+
+   **Receiver boundary and retry protocol**:
+   - The receiver is strictly **stateless**: it enforces same-path mutual exclusion
+     using atomic, non-overwriting hard links (`os.link`), but performs no cross-path
+     deduplication, persistent state tracking, or run execution dispatch. No persistent
+     service or global dedupe mechanism is added to the receiver.
+   - **Operational assumption / unverified precondition**: There is currently no coordinator
+     guard implementation in this repository. Upstream callers must deterministically and
+     uniquely bind each receipt target path to its `(run_id, attempt_id)` pair (e.g.,
+     `receipt-<run_id>-<attempt_id>.json`). When identifiers are embedded in filesystem paths,
+     safe sanitization, normalization, and path validation are strictly the coordinator's
+     responsibility to prevent traversal or naming collisions. Attempt-level single publication
+     relies entirely on this operational precondition until a coordinator guard is implemented.
+   - Exit code 2 represents any blocked condition, including collision with an existing
+     receipt file as well as hash or verification failures. Upstream callers must not judge
+     retryability by exit code alone; they must inspect the underlying error cause and verify
+     the state of the designated receipt path. When verification fails before publication,
+     no success receipt is written. The coordinator may safely retry only by:
+     1. Confirming the specific error cause and verifying that no success receipt exists at
+        the designated receipt path.
+     2. Rectifying packet transmission or missing evidence.
+     3. Re-running the receiver against the exact same bound receipt path.
+     If a success receipt already exists, the coordinator MUST NOT attempt in-place retries;
+     any subsequent or modified execution requires a new, distinct `attempt_id` and receipt path.
 5. Independently execute acceptance tests against the pinned candidate and obtain
    any required independent review. Then reconcile actual execution/cancellation
    and receiver handoff separately. This utility never grants VERIFIED or COMPLETE,
