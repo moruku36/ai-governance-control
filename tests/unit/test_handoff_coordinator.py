@@ -86,9 +86,11 @@ class CoordinatorTests(unittest.TestCase):
         def publish_then_interrupt(target, receipt):
             publish_receipt(target, receipt)
             raise KeyboardInterrupt()
-        with patch("orchestrator.core.handoff_coordinator.publish_receipt", publish_then_interrupt):
-            with self.assertRaises(KeyboardInterrupt):
-                self.coordinator.collect(self.packet, self.trust)
+        with (
+            patch("orchestrator.core.handoff_coordinator.publish_receipt", publish_then_interrupt),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            self.coordinator.collect(self.packet, self.trust)
         with closing(sqlite3.connect(self.db)) as conn:
             self.assertEqual(conn.execute(
                 "SELECT state FROM handoff_receipt_reservations").fetchone()[0], "RESERVED")
@@ -112,7 +114,7 @@ class CoordinatorTests(unittest.TestCase):
         def worker():
             try:
                 results.append(self.coordinator.collect(self.packet, self.trust)[0])
-            except Exception as exc:
+            except (HandoffError, OSError) as exc:
                 failures.append(exc)
         with patch("orchestrator.core.handoff_coordinator.publish_receipt", publish):
             threads = [threading.Thread(target=worker) for _ in range(2)]
@@ -144,9 +146,11 @@ class CoordinatorTests(unittest.TestCase):
     def test_publication_denial_keeps_reservation_without_success(self):
         def denied(path, receipt):
             raise PermissionError("hard link refused")
-        with patch("orchestrator.core.handoff_coordinator.publish_receipt", denied):
-            with self.assertRaisesRegex(PermissionError, "hard link refused"):
-                self.coordinator.collect(self.packet, self.trust)
+        with (
+            patch("orchestrator.core.handoff_coordinator.publish_receipt", denied),
+            self.assertRaisesRegex(PermissionError, "hard link refused"),
+        ):
+            self.coordinator.collect(self.packet, self.trust)
         path, _, state = self.coordinator.reserve(self.trust)
         self.assertEqual(state, "RESERVED")
         self.assertFalse(path.exists())
@@ -168,9 +172,11 @@ class CoordinatorTests(unittest.TestCase):
                     "manifest_sha256": trust["manifest_sha256"],
                     "outputs": [], "missing_optional": [], "next_step": "",
                     "verification": "", "coordinator_mac": "x" * 64}
-        with patch("orchestrator.core.handoff_coordinator.collect_receipt", return_pre_maced):
-            with self.assertRaisesRegex(HandoffError, "already contains coordinator_mac"):
-                self.coordinator.collect(self.packet, self.trust)
+        with (
+            patch("orchestrator.core.handoff_coordinator.collect_receipt", return_pre_maced),
+            self.assertRaisesRegex(HandoffError, "already contains coordinator_mac"),
+        ):
+            self.coordinator.collect(self.packet, self.trust)
 
         def return_wrong_version(packet_dir, trust):
             return {"schema_version": "0.1", "status": "COLLECTED",
@@ -179,9 +185,11 @@ class CoordinatorTests(unittest.TestCase):
                     "outputs": [{"path": "clarification.txt", "size_bytes": 10,
                                  "sha256": "a" * 64, "version": "999"}],
                     "missing_optional": [], "next_step": "", "verification": ""}
-        with patch("orchestrator.core.handoff_coordinator.collect_receipt", return_wrong_version):
-            with self.assertRaisesRegex(HandoffError, "output version differs from trusted pins"):
-                self.coordinator.collect(self.packet, self.trust)
+        with (
+            patch("orchestrator.core.handoff_coordinator.collect_receipt", return_wrong_version),
+            self.assertRaisesRegex(HandoffError, "output version differs from trusted pins"),
+        ):
+            self.coordinator.collect(self.packet, self.trust)
 
     def test_optional_missing_output_coordinator_lifecycle(self):
         self.manifest["outputs"][0]["required"] = False
