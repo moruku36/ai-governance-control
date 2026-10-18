@@ -3,7 +3,9 @@
 This is the first bounded foundation for the approved personal AI team plan:
 an offline manifest contract and receiver byte checks. AI Governance Control remains
 Experimental / MANUAL_ONLY. No native agent adapter, network retrieval, execution
-service, model selection, cloud access, or new persistent storage is added.
+service, model selection, cloud access, or resident storage service is added (the core
+receiver remains stateless; the optional coordinator uses only an explicitly
+caller-provided local SQLite file).
 
 ## Workflow
 
@@ -45,13 +47,9 @@ service, model selection, cloud access, or new persistent storage is added.
      using atomic, non-overwriting hard links (`os.link`), but performs no cross-path
      deduplication, persistent state tracking, or run execution dispatch. No persistent
      service or global dedupe mechanism is added to the receiver.
-   - **Operational assumption / unverified precondition**: There is currently no coordinator
-     guard implementation in this repository. Upstream callers must deterministically and
-     uniquely bind each receipt target path to its `(run_id, attempt_id)` pair (e.g.,
-     `receipt-<run_id>-<attempt_id>.json`). When identifiers are embedded in filesystem paths,
-     safe sanitization, normalization, and path validation are strictly the coordinator's
-     responsibility to prevent traversal or naming collisions. Attempt-level single publication
-     relies entirely on this operational precondition until a coordinator guard is implemented.
+   - The optional local coordinator below now implements the `(run_id, attempt_id)`
+     receipt-path guard. The standalone receiver command above still does not; callers
+     using it directly retain responsibility for the unique-path precondition.
    - Exit code 2 represents any blocked condition, including collision with an existing
      receipt file as well as hash or verification failures. Upstream callers must not judge
      retryability by exit code alone; they must inspect the underlying error cause and verify
@@ -68,6 +66,43 @@ service, model selection, cloud access, or new persistent storage is added.
    and receiver handoff separately. This utility never grants VERIFIED or COMPLETE,
    and never retries or dispatches jobs. Its receipt retains `declared_status` as
    a sender assertion, plus an explicit unknown verification and the next step.
+
+## Optional local coordinator (experimental)
+
+`python -m orchestrator.coordinate_handoff --packet PACKET --trust TRUST_JSON
+--db PRIVATE_LEDGER_SQLITE --receipt-dir PRIVATE_RECEIPTS` uses an explicitly
+selected SQLite database. The DB parent and private receipt directory must already
+exist. Do not point this at the operational ledger until its owner has approved
+integration. The trusted JSON must arrive by an existing authenticated route and
+be outside the packet; this command does not authenticate delivery. Keep the DB and
+receipt directory private and outside the packet. No resident service, remote agent,
+or task-status update is performed.
+
+The coordinator adds only a `handoff_receipt_reservations` table. In an immediate
+SQLite transaction, it fixes a canonical SHA-256-derived filename for each pair of
+run and attempt IDs and records the hash of the full trusted pin record. Reuse of
+the same attempt with different pins or receipt directory fails closed. A different
+attempt gets a different path. IDs never become raw path components. The existing
+`task_states` table is untouched. This guard applies only to callers sharing the
+same explicit DB; the standalone receiver is still available separately.
+
+The receiver performs its original byte and manifest checks before non-overwriting
+publication. A DB reservation left by a failed validation or interrupted process
+can be retried with the same pinned record and path. If publication succeeded before
+the DB status update, a subsequent call verifies a MAC over the complete receipt
+against a random reservation key kept in SQLite and marks it collected. An existing
+receipt with a wrong MAC or pins, or a missing receipt after `COLLECTED`, blocks for
+manual reconciliation; it is never overwritten. A hard-link failure also blocks,
+with the reservation still present and no success receipt. The local MAC detects
+receipt changes against this DB; it is not sender authentication. Recovery and
+durability tests cover process interruptions; directory entry persistence across
+sudden power loss (e.g. directory fsync) is unverified and not guaranteed.
+
+**Done gate:** `COLLECTED` confirms pinned byte receipt only. Completion still
+requires authenticated delivery, real-source provenance, independent acceptance
+tests and review, actual execution/cancellation reconciliation, and operator
+approval for any production integration. Synthetic offline tests and mocked
+publication do not satisfy those conditions.
 
 ## Contract
 
