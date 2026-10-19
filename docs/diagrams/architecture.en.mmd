@@ -1,0 +1,43 @@
+flowchart TD
+  HUMAN(["Person or external agent<br/>edits code; does not merge"])
+  IN["tasks/ · config/ · schemas/<br/>Task templates, profiles, JSON Schema contracts"]
+
+  subgraph CP["Control plane — orchestrator/"]
+    CLI["cli.py · core/policy.py<br/>doctor · demo · status · approve · cancel<br/>Policy engine with hard-deny actions"]
+    SCHED["core/scheduler.py · loop.py · lease.py<br/>Dependencies, run loop, leases"]
+    LEDGER[("core/state.py<br/>SQLite ledger, single writer")]
+    APPROVAL["core/approval.py · auth.py<br/>Single-use signed approvals"]
+  end
+
+  subgraph EXEC["Execution — adapters/"]
+    MANUAL["manual.py<br/>Trusted existing edits"]
+    CONTAINER["container.py<br/>Offline Linux container"]
+    ANTI["antigravity.py<br/>BLOCKED, no fallback"]
+  end
+
+  RUNTIME[/"runtime-root, outside the repo<br/>Worktrees · logs · PIDs · temp DB"/]
+  EVID["core/artifacts.py → verifier.py · junit.py<br/>Safe collection, then independent verification<br/>Receipt records COLLECTED only"]
+  GITHUB["adapters/github.py<br/>Branch and PR API"]
+  GATE["scripts/ + .github/workflows/ci.yml<br/>Secret scan · dependency audit · Ruff · tests<br/>container boundary"]
+  PR["Pull request<br/>Candidate change + evidence"]
+  REVIEW{"Human review<br/>and approval"}
+  MAIN[("main<br/>Protected by Ruleset")]
+
+  HUMAN --> IN
+  IN --> CLI
+  CLI --> SCHED
+  SCHED <--> LEDGER
+  SCHED --> MANUAL
+  SCHED --> CONTAINER
+  SCHED -.-> ANTI
+  CONTAINER --> RUNTIME
+  MANUAL --> EVID
+  CONTAINER --> EVID
+  EVID --> LEDGER
+  EVID --> GITHUB
+  GITHUB --> PR
+  GATE --> PR
+  PR --> REVIEW
+  APPROVAL --> REVIEW
+  REVIEW -->|"Approved, human merges"| MAIN
+  REVIEW -->|"Rejected"| HUMAN

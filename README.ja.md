@@ -10,6 +10,12 @@
 
 表示名を変更しました（旧称 AI Engineering Factory）。リポジトリ名は `moruku36/ai-governance-control` に移行しました。パッケージとCLIは変更ありません。[URL移行計画](docs/operations/repository-url-migration.md)を参照してください。
 
+### 構成図
+
+![構成図：人間または外部エージェントがCLIからタスクを投入し、制御プレーン（ポリシー、スケジューラ、SQLite台帳、署名付き承認）が手動またはオフラインコンテナのadapterを実行。成果物は回収・独立検証され、証拠つきPRが人間のレビューを経て、人間だけが main にマージする](docs/diagrams/architecture.ja.svg)
+
+<sub>[Pele](https://pele.run/) で [Mermaidソース](docs/diagrams/architecture.ja.mmd) から描画。正本の仕様は [ARCHITECTURE.md](ARCHITECTURE.md) です。</sub>
+
 ## 2. 構造
 
 - `orchestrator/`: 状態、ポリシー、実行、承認、GitHub確認
