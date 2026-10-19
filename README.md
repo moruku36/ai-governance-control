@@ -10,6 +10,12 @@ A task, verification, and approval framework for edits made by a person or an ex
 
 The display name changed (formerly AI Engineering Factory). The repository is now `moruku36/ai-governance-control`; the package and CLI are unchanged. See the [URL migration plan](docs/operations/repository-url-migration.md).
 
+### Architecture diagram
+
+![Architecture: a person or external agent submits a task through the CLI; the control plane (policy, scheduler, SQLite ledger, signed approvals) runs a manual or offline-container adapter; artifacts are collected and independently verified; a PR with evidence goes to human review, and only a human merges to main](docs/diagrams/architecture.en.svg)
+
+<sub>Rendered with [Pele](https://pele.run/) from the [Mermaid source](docs/diagrams/architecture.en.mmd). The authoritative specification is [ARCHITECTURE.md](ARCHITECTURE.md).</sub>
+
 ## 2. Structure
 
 - `orchestrator/`: state, policy, execution, approval, GitHub checks
