@@ -86,6 +86,10 @@ Our proposals, prompted by the GitInject preprint (arXiv 2606.09935v1; review st
 
 **Adoption conditions and rejection:** adopt only after the complete-diff foundation (G1) and a reviewed policy format; reject or revise if the base/candidate split cannot be shown offline, a candidate path can alter a trusted-base file, a security decision needs an LLM judgment, or the work requires live credentials or workflows. Nothing here is implemented.
 
+## Supplement: guard-bypass lessons from a practitioner report (proposals, not implemented)
+
+A first-person report ([note](../research/ai-dev-harness-guard-bypass-2610.md); Zenn, 2026-10-18) describes home-made agent guards that were bypassed: a secret-read block that missed other tools, a protected-branch block that missed a newline, hooks that failed open outside the repository, and a reviewer agent that loads configuration from the PR it reviews. It is a single self-reported account, not a benchmark. Proposals R1-R8 in the note extend existing stages and add nothing now: deny by target resource (G2), record each guard's residual gaps (G1), structured command input and nested-execution handling (G2), paired block/pass regression tables (G1/G4), fail-closed guards (G2), reviewer isolation that treats the candidate as data (G2/G5, with the [GitInject survey](../research/gitinject-2606.09935.md)), minimal notification content (G4), and a self-attack checklist in the pilot (G4). G3 is unchanged and no security boundary changes.
+
 ## Preconditions
 
 Before any live stage, decide separately the owner, pilot, data, competence issuer and first adapter. No functions are added now.
