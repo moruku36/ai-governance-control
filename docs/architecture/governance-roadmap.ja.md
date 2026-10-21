@@ -88,4 +88,6 @@ GitInjectプレプリント（arXiv 2606.09935v1。査読状況は未確認で�
 
 ## 前提条件
 
+要件定義から証跡付き merge 判断資料までの工程、累積上限、停止・再開、独立レビューを具体化する後続案は[自動化計画](bounded-factory-plan.ja.md)を参照してください。[Cloudflare 配置・個人 agent・会社利用の境界研究](../research/cloudflare-personal-agent-boundaries.ja.md)は別課題です。いずれも未実装で、G1〜G5 の順序、G3 の資格参照、既存の拒否と承認は変更しません。
+
 実サービスを扱う段階の前に、責任者、試行、データ、能力の発行者、最初のadapterを別途決定します。現時点で機能は追加しません。

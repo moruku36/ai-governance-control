@@ -54,6 +54,8 @@ python -m orchestrator.cli demo --task-file tasks/templates/basic-task.yaml --wo
 
 Future plans (not implemented): [Governance roadmap](docs/architecture/governance-roadmap.md) · [TDD research survey](docs/research/tdd-governance-2604.26615.md) · [AI CI/CD prompt-injection survey](docs/research/gitinject-2606.09935.md).
 
+Japanese planning notes (not implemented): [Requirements-to-merge handoff plan](docs/architecture/bounded-factory-plan.ja.md) · [Cloudflare and personal-agent boundary research](docs/research/cloudflare-personal-agent-boundaries.ja.md). These extend G1–G5 without enabling autonomous merge, deployment, or company connectivity.
+
 [MIT License](LICENSE)
 
 ---

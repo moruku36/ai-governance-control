@@ -54,6 +54,8 @@ python -m orchestrator.cli demo --task-file tasks/templates/basic-task.yaml --wo
 
 今後の計画（未実装）: [ガバナンス・ロードマップ](docs/architecture/governance-roadmap.ja.md) ・ [TDD研究サーベイ](docs/research/tdd-governance-2604.26615.ja.md) ・ [AI CI/CDプロンプトインジェクション調査](docs/research/gitinject-2606.09935.ja.md)
 
+追加の計画・研究（未実装）: [要件から merge 判断資料までの自動化計画](docs/architecture/bounded-factory-plan.ja.md) ・ [Cloudflare と個人 coding agent の情報境界](docs/research/cloudflare-personal-agent-boundaries.ja.md)。既存 G1–G5 を具体化し、例外承認・hard deny を維持します。会社接続や配備は行いません。
+
 [MIT License](LICENSE)
 
 ---
