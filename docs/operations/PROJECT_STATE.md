@@ -2,7 +2,7 @@
 
 ## 現在のステータス: EXPERIMENTAL / MANUAL_ONLY
 
-PR #7時点ではOS隔離や本人認証付き承認が未実装でした。その後のPR #12/#13（[通信遮断型Linuxコンテナ隔離](docs/operations/OFFLINE_CONTAINER_BOUNDARY.md)および[承認トークンとRun Loopの接続](docs/operations/APPROVED_CONTAINER_LOOP.md)）と5大コア領域改修によって、Linuxコンテナ隔離、本人認証付き承認、成果物検証、GitHub操作永続化、mainブランチ保護（Ruleset）が整いました。
+PR #7時点ではOS隔離や本人認証付き承認が未実装でした。その後のPR #12/#13（[通信遮断型Linuxコンテナ隔離](OFFLINE_CONTAINER_BOUNDARY.md)および[承認トークンとRun Loopの接続](APPROVED_CONTAINER_LOOP.md)）と5大コア領域改修によって、Linuxコンテナ隔離、本人認証付き承認、成果物検証、GitHub操作永続化、mainブランチ保護（Ruleset）が整いました。
 
 しかし、Antigravity Native Runtime公式SDKが未提供（BLOCKED）であるため、現時点では**本番利用向けに認証・保証された完全自律開発プラットフォームではなく、MANUAL_ONLYです**。
 
@@ -56,7 +56,7 @@ PR #7時点ではOS隔離や本人認証付き承認が未実装でした。そ�
 5. **GitHubはDurable Engineering Source of Truthであり、Runtime Scratch Areaではありません。**  
    Active Database、Process Metadata、Lease、Raw Session Log、CredentialなどはRepository外のRuntime Boundaryへ保存します。
 
-6. **Open Source Licenseは[MIT License](LICENSE)を採用しています。**  
+6. **Open Source Licenseは[MIT License](../../LICENSE)を採用しています。**
    第三者によるReuse / Redistribution / Modificationは、MIT Licenseの条件下で許可されています。
 
 ## Documentationの優先順位
@@ -86,6 +86,6 @@ Status Document同士で内容が食い違う場合は、次の順序で判断�
 - 現在の名称は **AI Governance Control**（旧名: AI Engineering Factory）です。
 - 今回の変更で完了したのは **G0（文書と表示名のみ）** です。
 - G1〜G5 はロードマップ上の提案であり、**未実装**です。期限や自動リリースはありません。
-- ロードマップ（[英語](docs/architecture/governance-roadmap.md) / [日本語](docs/architecture/governance-roadmap.ja.md)）と [ADR 0004](docs/adr/0004-product-name-and-governance-roadmap.md)（英語）を参照してください。
+- ロードマップ（[英語](../architecture/governance-roadmap.md) / [日本語](../architecture/governance-roadmap.ja.md)）と [ADR 0004](../adr/0004-product-name-and-governance-roadmap.md)（英語）を参照してください。
 - 運用状態は引き続き `MANUAL_ONLY` で、ランタイムの識別子（パッケージ名、CLI、環境変数、パス、スキーマID、API名など）は変更していません。
 - これは安全性や本番利用適性を保証するものではありません。

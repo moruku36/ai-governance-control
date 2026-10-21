@@ -4,7 +4,7 @@
 runs a registered validation command as a real subprocess directly against a
 worktree you give it, with no network or filesystem isolation. It is what
 `python -m orchestrator.cli demo` uses under the hood (see
-[Getting Started](../getting-started.md#5-run-it-end-to-end-local-demo)).
+[Getting Started](../getting-started.md#6-run-it-end-to-end-local-demo)).
 
 Use it when:
 

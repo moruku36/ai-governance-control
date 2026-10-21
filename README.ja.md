@@ -4,6 +4,8 @@
 
 **Experimental / MANUAL_ONLY** ・ Python 3.11 以上
 
+[ドキュメント索引 / Documentation index](docs/README.md) ・ [はじめに](docs/getting-started.md) ・ [現在の状態](docs/operations/PROJECT_STATE.md)
+
 ## 1. 何をするものか
 
 人間または外部エージェントによる編集を扱う、タスク・検証・承認の基盤です。コードを自律的に書くことはしません。流れは タスク/編集 -> チェック -> PR -> 人間の承認 です。自動マージ・自動デプロイはありません。
@@ -14,7 +16,7 @@
 
 ![構成図：人間または外部エージェントがCLIからタスクを投入し、制御プレーン（ポリシー、スケジューラ、SQLite台帳、署名付き承認）が手動またはオフラインコンテナのadapterを実行。成果物は回収・独立検証され、証拠つきPRが人間のレビューを経て、人間だけが main にマージする](docs/diagrams/architecture.ja.svg)
 
-<sub>[Pele](https://pele.run/) で [Mermaidソース](docs/diagrams/architecture.ja.mmd) から描画。正本の仕様は [ARCHITECTURE.md](ARCHITECTURE.md) です。</sub>
+<sub>[Pele](https://pele.run/) で [Mermaidソース](docs/diagrams/architecture.ja.mmd) から描画。正本の仕様は [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) です。</sub>
 
 ## 2. 構造
 
@@ -50,7 +52,7 @@ python -m orchestrator.cli demo --task-file tasks/templates/basic-task.yaml --wo
 
 ## 5. ドキュメント
 
-[プロジェクト状態](PROJECT_STATE.md) ・ [アーキテクチャ](ARCHITECTURE.md) ・ [運用](OPERATIONS.md) ・ [セキュリティ](SECURITY.md) ・ [クイックスタート](docs/getting-started.md) ・ [Adapter](docs/adapters/README.md) ・ [互換性](docs/compatibility/matrix.md) ・ [引き渡し](docs/operations/HANDOFF_V01.ja.md) ・ [起動時の認証情報](docs/security/runpod-startup-credential.ja.md)
+[プロジェクト状態](docs/operations/PROJECT_STATE.md) ・ [アーキテクチャ](docs/architecture/ARCHITECTURE.md) ・ [運用](docs/operations/OPERATIONS.md) ・ [セキュリティ](SECURITY.md) ・ [クイックスタート](docs/getting-started.md) ・ [Adapter](docs/adapters/README.md) ・ [互換性](docs/compatibility/matrix.md) ・ [引き渡し](docs/operations/HANDOFF_V01.ja.md) ・ [起動時の認証情報](docs/security/runpod-startup-credential.ja.md)
 
 今後の計画（未実装）: [ガバナンス・ロードマップ](docs/architecture/governance-roadmap.ja.md) ・ [TDD研究サーベイ](docs/research/tdd-governance-2604.26615.ja.md) ・ [AI CI/CDプロンプトインジェクション調査](docs/research/gitinject-2606.09935.ja.md)
 

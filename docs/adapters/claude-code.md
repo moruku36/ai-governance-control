@@ -23,7 +23,7 @@ job starts once Claude Code has made its edits.
 
 3. **Hand the worktree to the AI Governance Control for verification**, exactly like any
    other builder output — see
-   [Getting Started §6](../getting-started.md#6-the-real-isolation--verification-path)
+   [Getting Started §7](../getting-started.md#7-the-real-isolation--verification-path)
    for the full snapshot → diff → verify flow, or use `ManualAdapter` for a
    quicker, non-isolated check while iterating (`manual.md`).
 

@@ -5,7 +5,7 @@ Partially implemented / trust boundary not accepted at the time this ADR was wri
 SQLite and HMAC primitives exist; authenticated Human identity, isolated key/storage,
 durable session recovery and remote operation journal did not yet. Prior guarantees below
 were design intentions, not verified capabilities at that point. For the current, up-to-date
-capability status see [PROJECT_STATE.md](../../PROJECT_STATE.md).
+capability status see [PROJECT_STATE.md](../operations/PROJECT_STATE.md).
 
 ## Context
 In previous phases, approval tokens were stored as simple JSON files in `state/approvals/`. State transitions used Python's `threading.Lock` within a single process:

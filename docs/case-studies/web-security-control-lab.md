@@ -400,7 +400,7 @@ Sonnetが想定していたセキュリティ改修を大量に書かなかっ�
 ## 10. 関連リンク
 
 - [AI Governance Control README](../../README.md)
-- [Architecture Specification](../../ARCHITECTURE.md)
+- [Architecture Specification](../architecture/ARCHITECTURE.md)
 - [Security Policy & Guardrails](../../SECURITY.md)
 - [Getting Started](../getting-started.md)
 - [AI Governance Control PR #25: Phase Contract / Human Merge Boundary](https://github.com/moruku36/ai-governance-control/pull/25)

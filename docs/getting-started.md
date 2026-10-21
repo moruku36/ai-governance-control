@@ -237,7 +237,7 @@ Automatic merge is prohibited. Verify the human merge separately. See the [safet
 
 - [Adapter Guide](adapters/README.md) — connect Claude Code, Codex, or your
   own agent instead of hand-editing the worktree in step 5.
-- [Architecture](../ARCHITECTURE.md) — full component and state-machine spec.
-- [Operations Guide](../OPERATIONS.md) — crash recovery, CLI reference, log
+- [Architecture](architecture/ARCHITECTURE.md) — full component and state-machine spec.
+- [Operations Guide](operations/OPERATIONS.md) — crash recovery, CLI reference, log
   locations.
 - [Compatibility Matrix](compatibility/matrix.md) — what's verified where.

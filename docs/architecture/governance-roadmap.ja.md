@@ -10,7 +10,7 @@
 
 ## 現状（main `8ef30734d041c7fa817c7dc5d4209fa2d31c8a8d`）
 
-基準: main の完全なピン留めSHA [`8ef30734d041c7fa817c7dc5d4209fa2d31c8a8d`](https://github.com/moruku36/ai-governance-control/tree/8ef30734d041c7fa817c7dc5d4209fa2d31c8a8d)。以前の基準（`2525cbb`）からの変更はG0の表示と文書のみで、以下の実装に関する記述は再確認のうえ変更ありません。現在のプロジェクト状況は [PROJECT_STATE.md](../../PROJECT_STATE.md)、承認付きコンテナadapterとその制限は [APPROVED_CONTAINER_LOOP.md](../operations/APPROVED_CONTAINER_LOOP.md) を参照してください。
+基準: main の完全なピン留めSHA [`8ef30734d041c7fa817c7dc5d4209fa2d31c8a8d`](https://github.com/moruku36/ai-governance-control/tree/8ef30734d041c7fa817c7dc5d4209fa2d31c8a8d)。以前の基準（`2525cbb`）からの変更はG0の表示と文書のみで、以下の実装に関する記述は再確認のうえ変更ありません。現在のプロジェクト状況は [PROJECT_STATE.md](../operations/PROJECT_STATE.md)、承認付きコンテナadapterとその制限は [APPROVED_CONTAINER_LOOP.md](../operations/APPROVED_CONTAINER_LOOP.md) を参照してください。
 
 実装済み: タスクJSON Schema、DAG、単一のリスク列挙（`low/medium/high/critical`）、コマンド/パスポリシー、オフラインLinuxコンテナ、回収とIndependentVerifier（完全差分の制限は残る）、単回使用HMACトークンを扱うApprovalManager、ID/操作権限を扱うApproverRegistry、認証付きCLI approve（`cmd_approve`）、SQLite台帳/ジャーナル、GitHubチェック、COLLECTEDのみの受領、初期状態で無効なWindows/RunPodコード。HMACトークンの完全性・単回使用と、ApproverRegistryによるID・操作権限は別の仕組みです。実運用では保護されたレジストリと鍵の配備が引き続き必要です。状態は Experimental/MANUAL_ONLY で、根拠は模擬/CIであり、実キー、GPU、Windows Hello、Mattermostの証明ではありません。
 
