@@ -58,6 +58,7 @@ Start with **Getting started**, check **Current state** for capability limits, a
 | Cloudflare と個人 agent の境界 / Cloudflare and personal agents | [研究メモ / 日本語](research/cloudflare-personal-agent-boundaries.ja.md) |
 | TDD の研究 / TDD survey | [日本語](research/tdd-governance-2604.26615.ja.md) · [English](research/tdd-governance-2604.26615.md) |
 | AI CI/CD の prompt injection / GitInject survey | [日本語](research/gitinject-2606.09935.ja.md) · [English](research/gitinject-2606.09935.md) |
+| 自作ガード突破の教訓 / Guard-bypass lessons (practitioner report) | [日本語](research/ai-dev-harness-guard-bypass-2610.ja.md) · [English](research/ai-dev-harness-guard-bypass-2610.md) |
 
 ## 事例と例 / Case study and examples
 
