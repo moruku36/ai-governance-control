@@ -22,7 +22,7 @@ you, it verifies and gates whatever the agent produced.
 3. Hand the resulting worktree to the AI Governance Control for verification:
    - Quick, non-isolated check while iterating: [`ManualAdapter`](manual.md).
    - Full isolated verification against untrusted output:
-     [Getting Started §6](../getting-started.md#6-the-real-isolation--verification-path)
+     [Getting Started §7](../getting-started.md#7-the-real-isolation--verification-path)
      (`OfflineContainerRunner` + `IndependentVerifier`, restricted to a
      read-only snapshot of the worktree).
 

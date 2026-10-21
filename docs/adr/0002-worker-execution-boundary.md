@@ -6,7 +6,7 @@ A later review found that the controller at that point used host-user Popen and
 taskkill, not restricted tokens or Windows Job Objects, and that helpers did not
 enforce worker filesystem/network isolation. For the current, up-to-date capability
 status (including the offline Linux container boundary implemented since) see
-[PROJECT_STATE.md](../../PROJECT_STATE.md).
+[PROJECT_STATE.md](../operations/PROJECT_STATE.md).
 
 ## Context
 In Phase 1-4, sandboxing relied on environment variable sanitization, worktree directories, and shell metacharacter checking. This did not constitute a hardened execution boundary:

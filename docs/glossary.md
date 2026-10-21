@@ -17,5 +17,5 @@
 
 ## 関連ドキュメント
 - [README](../README.md)
-- [Architecture](../ARCHITECTURE.md)
+- [Architecture](architecture/ARCHITECTURE.md)
 - [Getting Started](getting-started.md)

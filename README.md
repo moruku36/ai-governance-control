@@ -4,6 +4,8 @@
 
 **Experimental / MANUAL_ONLY** · Python 3.11+
 
+[Documentation index / ドキュメント索引](docs/README.md) · [Getting started](docs/getting-started.md) · [Current project state](docs/operations/PROJECT_STATE.md)
+
 ## 1. What it does
 
 A task, verification, and approval framework for edits made by a person or an external agent. It does not write code autonomously. Flow: task/edit -> checks -> PR -> human approval. Nothing is merged or deployed automatically.
@@ -14,7 +16,7 @@ The display name changed (formerly AI Engineering Factory). The repository is no
 
 ![Architecture: a person or external agent submits a task through the CLI; the control plane (policy, scheduler, SQLite ledger, signed approvals) runs a manual or offline-container adapter; artifacts are collected and independently verified; a PR with evidence goes to human review, and only a human merges to main](docs/diagrams/architecture.en.svg)
 
-<sub>Rendered with [Pele](https://pele.run/) from the [Mermaid source](docs/diagrams/architecture.en.mmd). The authoritative specification is [ARCHITECTURE.md](ARCHITECTURE.md).</sub>
+<sub>Rendered with [Pele](https://pele.run/) from the [Mermaid source](docs/diagrams/architecture.en.mmd). The authoritative specification is [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).</sub>
 
 ## 2. Structure
 
@@ -50,7 +52,7 @@ python -m orchestrator.cli demo --task-file tasks/templates/basic-task.yaml --wo
 
 ## 5. Docs
 
-[Project state](PROJECT_STATE.md) · [Architecture](ARCHITECTURE.md) · [Operations](OPERATIONS.md) · [Security](SECURITY.md) · [Quickstart](docs/getting-started.md) · [Adapters](docs/adapters/README.md) · [Compatibility](docs/compatibility/matrix.md) · [Handoff](docs/operations/HANDOFF_V01.md) · [Startup credentials (Japanese)](docs/security/runpod-startup-credential.ja.md)
+[Project state](docs/operations/PROJECT_STATE.md) · [Architecture](docs/architecture/ARCHITECTURE.md) · [Operations](docs/operations/OPERATIONS.md) · [Security](SECURITY.md) · [Quickstart](docs/getting-started.md) · [Adapters](docs/adapters/README.md) · [Compatibility](docs/compatibility/matrix.md) · [Handoff](docs/operations/HANDOFF_V01.md) · [Startup credentials (Japanese)](docs/security/runpod-startup-credential.ja.md)
 
 Future plans (not implemented): [Governance roadmap](docs/architecture/governance-roadmap.md) · [TDD research survey](docs/research/tdd-governance-2604.26615.md) · [AI CI/CD prompt-injection survey](docs/research/gitinject-2606.09935.md).
 
