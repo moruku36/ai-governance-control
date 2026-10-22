@@ -139,7 +139,7 @@ def test_invalid_fields_fail_closed_without_echo(payload, tmp_path, path, value)
         build_approval_context(payload)
     result = cli(json.dumps(payload).encode(), tmp_path)
     assert result.returncode == 2 and result.stdout == b""
-    assert result.stderr == b"Invalid approval context\n"
+    assert result.stderr == ("Invalid approval context" + os.linesep).encode("ascii")
 
 
 @pytest.mark.parametrize("location", ["top", "runtime"])
@@ -157,13 +157,16 @@ def test_unknown_and_missing_fields_rejected(payload, location):
 
 @pytest.mark.parametrize("raw", [b"", b"{}", b"[]", b"null", b"\xff", b"{", b"{}{}",
                                  b'{"key":1,"key":2}', b'{"x":NaN}', b'{"x":Infinity}',
-                                 b"[" * 2000 + b"]" * 2000, b" " * (MAX_CONTEXT_BYTES + 1)])
+                                 b"[" * 2000 + b"]" * 2000, b" " * (MAX_CONTEXT_BYTES + 1)],
+                         ids=["empty", "object", "array", "null", "invalid-utf8", "incomplete",
+                              "trailing-object", "duplicate-key", "nan", "infinity",
+                              "excessive-nesting", "oversized"])
 def test_bounded_parser_and_cli_reject_malformed(raw, tmp_path):
     with pytest.raises(ApprovalContextError):
         parse_approval_context(raw)
     result = cli(raw, tmp_path)
     assert result.returncode == 2 and result.stdout == b""
-    assert result.stderr == b"Invalid approval context\n"
+    assert result.stderr == ("Invalid approval context" + os.linesep).encode("ascii")
 
 
 def test_nested_duplicate_key_rejected(payload, tmp_path):
@@ -251,4 +254,4 @@ def test_unsupported_offline_profile_values_rejected(payload, tmp_path, path, va
         build_approval_context(payload)
     result = cli(json.dumps(payload).encode(), tmp_path)
     assert result.returncode == 2 and result.stdout == b""
-    assert result.stderr == b"Invalid approval context\n"
+    assert result.stderr == ("Invalid approval context" + os.linesep).encode("ascii")
