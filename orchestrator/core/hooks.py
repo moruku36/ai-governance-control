@@ -4,6 +4,7 @@ import subprocess
 import time
 from collections.abc import Callable
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 
@@ -90,11 +91,29 @@ class HookEngine:
 
 
 def run_command_hook(argv: list[str], cwd: str, timeout_seconds: int = 30) -> dict[str, Any]:
-    """Helper to run an external command hook synchronously with typed argv."""
+    """Run a trusted typed command in an explicit, existing absolute directory.
+
+    This helper does not infer a repository or authorize the command. Its caller
+    owns the hook registry, repository context and output handling.
+    """
+    if (not isinstance(cwd, str) or not cwd or "\0" in cwd
+            or not Path(cwd).is_absolute()):
+        return {"status": "ERROR", "reason": "Hook requires an explicit absolute cwd (DENIED)"}
+    try:
+        directory = Path(cwd).resolve(strict=True)
+        if not directory.is_dir():
+            return {"status": "ERROR", "reason": "Hook cwd is not a directory (DENIED)"}
+    except (OSError, RuntimeError, ValueError):
+        return {"status": "ERROR", "reason": "Hook cwd cannot be resolved (DENIED)"}
+    if (not isinstance(argv, list) or not argv
+            or not all(isinstance(arg, str) and "\0" not in arg for arg in argv)
+            or not argv[0]):
+        return {"status": "ERROR", "reason": "Hook requires typed argv (DENIED)"}
     try:
         res = subprocess.run(
             argv,
-            cwd=cwd,
+            cwd=str(directory),
+            shell=False,
             capture_output=True,
             text=True,
             timeout=timeout_seconds,

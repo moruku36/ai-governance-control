@@ -78,7 +78,7 @@ def completed(stdout="", returncode=0):
     return MagicMock(stdout=stdout, stderr="fixture error", returncode=returncode)
 
 
-@pytest.mark.parametrize("branch", ["refs/heads/main", "+main", "task/x:main", "--all"])
+@pytest.mark.parametrize("branch", ["refs/heads/main", "+main", "task/x:main", "--all", None, 1, ""])
 def test_branch_ref_cannot_bypass_main_policy(tmp_path, branch):
     with patch("subprocess.run") as run:
         with pytest.raises(GitHubPublishError):
