@@ -1,5 +1,10 @@
 # Governance roadmap
 
+Local follow-up (2026-10-22; not merged): [reconciled implementation inventory](../operations/remediation-status-2026-10-22.md).
+It records R2 documentation, partial R3/R4/R5 remediation, and the local
+[G1 committed-tree contract foundation](complete-candidate-contract.md); no G1–G5 stage is complete.
+The proposal status below describes the original roadmap baseline, not this local implementation batch.
+
 *Proposal only. No deadlines and no automatic release. G0 (documentation and display name) is complete and merged in [PR #37](https://github.com/moruku36/ai-governance-control/pull/37). G1-G5 are not implemented. The current change is planning text only, and the TDD additions below are proposals.*
 
 ## Source and status

@@ -85,3 +85,5 @@ Root entry points and standard files stay in place. Agent/GitHub metadata and ru
 | `evidence/junit-baseline.json` | [docs/security/evidence/junit-baseline.json](security/evidence/junit-baseline.json) |
 
 以前のパスを使う外部リンクは更新が必要です。過去 commit を固定した参照は履歴として維持します。旧名の stub はルートに追加せず、この一覧を移動先の案内に使います。External links using old paths need updating; commit-pinned historical references remain unchanged.
+
+Local implementation follow-up (not merged): [2026-10-22 remediation inventory](operations/remediation-status-2026-10-22.md).

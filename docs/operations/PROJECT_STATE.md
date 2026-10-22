@@ -1,5 +1,19 @@
 # Project State
 
+## Local remediation status (2026-10-22; not merged)
+
+See the [prioritized implementation inventory](remediation-status-2026-10-22.md)
+for G1–G5 / R1–R8 dependencies, partial R3/R4/R5 changes, and the isolated
+[G1 committed-tree contract foundation](../architecture/complete-candidate-contract.md). Each existing guard's
+coverage, blind spots and backing boundary are recorded in the
+[threat model control matrix](../security/threat-model.md#3-control-coverage-and-residual-gaps-r2).
+The standalone [candidate-binding](../architecture/candidate-binding.md) and
+[assessment](../architecture/governance-assessment-contract.md) records are evidence-only;
+no authorization or state transition consumes them yet. The separate
+[shared CLI/API context preview](../architecture/approval-context-preview.md) likewise
+grants no authority and does not replace existing approval entry points.
+Complete-diff receipt refusal and Experimental / MANUAL_ONLY remain unchanged.
+
 ## 現在のステータス: EXPERIMENTAL / MANUAL_ONLY
 
 PR #7時点ではOS隔離や本人認証付き承認が未実装でした。その後のPR #12/#13（[通信遮断型Linuxコンテナ隔離](OFFLINE_CONTAINER_BOUNDARY.md)および[承認トークンとRun Loopの接続](APPROVED_CONTAINER_LOOP.md)）と5大コア領域改修によって、Linuxコンテナ隔離、本人認証付き承認、成果物検証、GitHub操作永続化、mainブランチ保護（Ruleset）が整いました。
