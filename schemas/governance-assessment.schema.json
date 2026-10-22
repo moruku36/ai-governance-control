@@ -1,0 +1,351 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "task_id",
+    "repository_id",
+    "spec_digest",
+    "candidate_digest",
+    "policy_digest",
+    "risk",
+    "action_id",
+    "data_classification",
+    "external_impact",
+    "reversibility",
+    "reasons",
+    "unknowns",
+    "assessor_ref",
+    "allowed_operation_ids",
+    "runtime",
+    "credentials"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "governance-assessment/1"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,6}(?![\\s\\S])"
+    },
+    "repository_id": {
+      "$ref": "#/$defs/reference"
+    },
+    "spec_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "candidate_digest": {
+      "$ref": "#/$defs/digest",
+      "description": "CandidateSeal.digest from committed-candidate-binding/1, not a TreeSnapshot digest or legacy partial-file digest."
+    },
+    "policy_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "risk": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "action_id": {
+      "$ref": "#/$defs/reference"
+    },
+    "data_classification": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "unknown"
+      ]
+    },
+    "external_impact": {
+      "enum": [
+        "none",
+        "bounded",
+        "material",
+        "unknown"
+      ]
+    },
+    "reversibility": {
+      "enum": [
+        "reversible",
+        "partially_reversible",
+        "irreversible",
+        "unknown"
+      ]
+    },
+    "reasons": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "assessor_ref": {
+      "$ref": "#/$defs/reference"
+    },
+    "allowed_operation_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/reference"
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "principal_ref",
+        "profile_ref",
+        "configuration_digest",
+        "snapshot_digest",
+        "mount_refs",
+        "network_scope",
+        "egress_refs"
+      ],
+      "properties": {
+        "principal_ref": {
+          "$ref": "#/$defs/reference"
+        },
+        "profile_ref": {
+          "$ref": "#/$defs/reference"
+        },
+        "configuration_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "snapshot_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "mount_refs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        },
+        "network_scope": {
+          "enum": [
+            "none",
+            "allowlisted",
+            "unknown"
+          ]
+        },
+        "egress_refs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/reference"
+          }
+        }
+      }
+    },
+    "credentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delivery_mode",
+        "retrieval_authority_ref"
+      ],
+      "properties": {
+        "delivery_mode": {
+          "enum": [
+            "none",
+            "direct",
+            "injected",
+            "proxied",
+            "unknown"
+          ]
+        },
+        "retrieval_authority_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-factory/schemas/governance-assessment.schema.json",
+  "title": "Non-authorizing governance assessment",
+  "$defs": {
+    "reference": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}(?![\\s\\S])"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}(?![\\s\\S])"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+(?![\\s\\S])"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "anyOf": [
+          {
+            "properties": {
+              "data_classification": {
+                "const": "unknown"
+              }
+            }
+          },
+          {
+            "properties": {
+              "external_impact": {
+                "const": "unknown"
+              }
+            }
+          },
+          {
+            "properties": {
+              "reversibility": {
+                "const": "unknown"
+              }
+            }
+          },
+          {
+            "properties": {
+              "runtime": {
+                "properties": {
+                  "network_scope": {
+                    "const": "unknown"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "credentials": {
+                "properties": {
+                  "delivery_mode": {
+                    "const": "unknown"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "unknowns": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "network_scope": {
+                "const": "none"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "egress_refs": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "network_scope": {
+                "const": "allowlisted"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "egress_refs": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "credentials": {
+            "properties": {
+              "delivery_mode": {
+                "const": "none"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "credentials": {
+            "properties": {
+              "retrieval_authority_ref": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "credentials": {
+            "properties": {
+              "retrieval_authority_ref": {
+                "$ref": "#/$defs/reference"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
