@@ -135,7 +135,8 @@ class RealGitHubStatePublisher:
 
     @staticmethod
     def _validate_branch(branch: str) -> None:
-        if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9/_.-]*", branch)
+        if (not isinstance(branch, str)
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9/_.-]*", branch)
                 or branch.startswith("refs/") or ".." in branch or "//" in branch
                 or branch.endswith(("/", ".", ".lock"))):
             raise GitHubPublishError("Invalid or fully qualified branch name")
@@ -157,8 +158,10 @@ class RealGitHubStatePublisher:
             from orchestrator.core.policy import HardDenyViolationError
             raise HardDenyViolationError("Force push is strictly prohibited across all branches")
 
-        self.policy_engine.evaluate_git_operation(target_branch, "push", is_force=is_force)
+        # Preserve the adapter's short-branch-only input/error contract before
+        # the policy layer, which also accepts explicit refs/heads/... inputs.
         self._validate_branch(target_branch)
+        self.policy_engine.evaluate_git_operation(target_branch, "push", is_force=is_force)
         # Verify the push destination, not merely the fetch URL or a default slug.
         destination = _run(
             ["git", "remote", "get-url", "--push", "--all", "origin"],

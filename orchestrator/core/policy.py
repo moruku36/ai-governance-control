@@ -85,7 +85,11 @@ class PolicyEngine:
         self.hard_deny = set(self.policy_data["hard_deny_actions"])
         self.approval_required = set(self.policy_data["approval_required_actions"])
         self.allowed_commands = set(self.policy_data["allowed_commands"])
-        self.protected_branches = set(self.policy_data["protected_branches"])
+        # Treat configured short names and explicit branch refs identically.
+        self.protected_branches = {
+            branch.removeprefix("refs/heads/")
+            for branch in self.policy_data["protected_branches"]
+        }
 
     def get_policy_digest(self) -> str:
         canonical = json.dumps(self.policy_data, sort_keys=True, separators=(",", ":"))
@@ -105,7 +109,17 @@ class PolicyEngine:
 
     def evaluate_git_operation(self, target_branch: str, operation: str, is_force: bool = False) -> None:
         """Evaluate git push/branch operations."""
-        if target_branch in self.protected_branches:
+        # This API takes an explicit branch, never one inferred from the caller's cwd.
+        # Unknown context must not silently take the unprotected-branch path.
+        if (not isinstance(target_branch, str) or not target_branch
+                or any(char.isspace() or ord(char) < 32 for char in target_branch)
+                or not isinstance(operation, str) or operation not in {"push", "direct_commit"}
+                or type(is_force) is not bool):
+            raise BranchProtectionError("Git operation context is missing or unsupported (DENIED)")
+        branch = target_branch.removeprefix("refs/heads/")
+        if not branch or branch.startswith("refs/") or branch == "HEAD":
+            raise BranchProtectionError("Explicit branch context is required (DENIED)")
+        if branch in self.protected_branches or target_branch in self.protected_branches:
             if operation in ("push", "direct_commit"):
                 raise HardDenyViolationError(
                     f"Direct push to protected branch '{target_branch}' is strictly prohibited"
@@ -117,8 +131,8 @@ class PolicyEngine:
 
     def evaluate_command_id(self, command_id: str) -> None:
         """Evaluate whether a command is registered in allowed commands."""
-        base_cmd = command_id.split()[0] if command_id else ""
-        if base_cmd not in self.allowed_commands:
+        # IDs are structured registry keys, not command lines to tokenize.
+        if not isinstance(command_id, str) or command_id not in self.allowed_commands:
             raise CommandNotAllowedError(
                 f"Command '{command_id}' is not in allowed command registry: {sorted(self.allowed_commands)}"
             )
