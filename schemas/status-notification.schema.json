@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-factory/schemas/status-notification.schema.json",
+  "title": "Non-authorizing status-only notification",
+  "description": "Fixed-field status notice. There is deliberately no free-form text, URL, endpoint, path, command, review comment or digest field.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "task_id",
+    "repository_id",
+    "event",
+    "occurred_at"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "status-notification/1"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,6}(?![\\s\\S])"
+    },
+    "repository_id": {
+      "type": "string",
+      "description": "Operator-assigned notification-safe identifier. Dots, slashes, colons and at-signs are refused so a hostname, URL or webhook path cannot be carried here; runs of 32 or more alphanumerics are refused as token- or digest-like. This is a shape check, not a secret detector.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,47}(?![\\s\\S])",
+      "not": {
+        "pattern": "[A-Za-z0-9]{32,}"
+      }
+    },
+    "event": {
+      "enum": [
+        "task_collected",
+        "task_failed",
+        "task_stopped",
+        "approval_needed",
+        "review_needed",
+        "guard_denied"
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "description": "UTC timestamp supplied by the trusted caller; the library never reads a clock.",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z(?![\\s\\S])"
+    }
+  }
+}
