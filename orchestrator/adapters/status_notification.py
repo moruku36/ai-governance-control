@@ -11,8 +11,8 @@ import json
 import re
 import socket
 import ssl
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 from urllib.parse import urlsplit
 
 from orchestrator.core.status_notification import (
@@ -107,8 +107,8 @@ def _validated_target(config: NotificationDeliveryConfig) -> tuple[str, str, str
     if (_PATH.fullmatch(path) is None or "//" in path
             or any(segment == ".." for segment in path.split("/"))):
         raise _deny()
-    ip, _version = _validated_ip(config.endpoint_ip)
-    return host, path, ip
+    _validated_ip(config.endpoint_ip)
+    return host, path, config.endpoint_ip
 
 
 def _validated_notice(notice: StatusNotification) -> StatusNotification:
@@ -132,7 +132,7 @@ def _validated_notice(notice: StatusNotification) -> StatusNotification:
 
 def _send_https(host: str, path: str, ip: str, body: bytes, timeout_seconds: int) -> int:
     """One TLS-verified HTTPS POST to the configured IP, without DNS or redirects."""
-    _ip, version = _validated_ip(ip)
+    version = _validated_ip(ip)[1]
     family = socket.AF_INET if version == 4 else socket.AF_INET6
     raw = socket.socket(family, socket.SOCK_STREAM)
     try:
@@ -187,7 +187,8 @@ def deliver_status_notification(
                         config.timeout_seconds)
     except NotificationDeliveryError:
         blocked = True
-    except Exception:
+    # A transport may include the secret endpoint in any exception type.
+    except Exception:  # noqa: BLE001
         uncertain = True
     if blocked:
         raise _deny()
