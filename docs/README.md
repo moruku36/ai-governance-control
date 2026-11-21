@@ -2,9 +2,14 @@
 
 [日本語 README](../README.ja.md) · [English README](../README.md)
 
-**Experimental / MANUAL_ONLY。** 初めての利用は「はじめに」、利用可否は「現在の状態」、設計判断は「設計」から確認してください。計画・研究は実装済み機能を意味しません。
+**Experimental / MANUAL_ONLY**
 
-Start with **Getting started**, check **Current state** for capability limits, and use **Design** for architecture and decisions. Plans and research do not enable features. Nothing in this organization change alters execution, approval, CI, or merge policy.
+| 目的 / Reader | 最初に開くページ / Start here |
+|---|---|
+| 既存の編集を確認したい / Check trusted edits | [Getting started](getting-started.md) |
+| エージェントのツール利用・委譲を設計したい / Design tool use and delegation | [日本語](agent-workflows/README.ja.md) · [English](agent-workflows/README.md) |
+| 実装・制約を確認したい / Operate the control plane | [Current state](operations/PROJECT_STATE.md) · [Operations](operations/OPERATIONS.md) |
+| 設計の背景を調べたい / Read research and decisions | [Research index](research/README.md) · [Architectural decisions](adr/) |
 
 ## はじめに / Start here
 
@@ -25,7 +30,7 @@ Start with **Getting started**, check **Current state** for capability limits, a
 | ADR / Architecture decisions | [Core stack and isolation](adr/0001-core-tech-stack-and-isolation.md) · [Worker boundary](adr/0002-worker-execution-boundary.md) · [Control plane and approval](adr/0003-control-plane-trust-and-approval.md) · [Name and governance roadmap](adr/0004-product-name-and-governance-roadmap.md) |
 | 構成図 / Diagrams and sources | [English SVG](diagrams/architecture.en.svg) / [Mermaid](diagrams/architecture.en.mmd) · [日本語 SVG](diagrams/architecture.ja.svg) / [Mermaid](diagrams/architecture.ja.mmd) |
 
-仕様の図は将来像を含みます。現在の状態と文書の優先順位は [PROJECT_STATE](operations/PROJECT_STATE.md) を参照してください。The architecture diagrams include planned components; use the current-state document for status and precedence.
+現行の経路は仕様§1、将来のツール操作は[エージェント設計](agent-workflows/README.ja.md)に掲載しています。See [agent workflows](agent-workflows/README.md) for the proposed action lifecycle.
 
 ## 運用と adapter / Operations and adapters
 
@@ -55,10 +60,7 @@ Start with **Getting started**, check **Current state** for capability limits, a
 |---|---|
 | G1–G5 ガバナンス計画 / Governance roadmap | [日本語](architecture/governance-roadmap.ja.md) · [English](architecture/governance-roadmap.md) |
 | 要件から merge 判断資料まで / Bounded factory plan | [計画 / 日本語](architecture/bounded-factory-plan.ja.md) |
-| Cloudflare と個人 agent の境界 / Cloudflare and personal agents | [研究メモ / 日本語](research/cloudflare-personal-agent-boundaries.ja.md) |
-| TDD の研究 / TDD survey | [日本語](research/tdd-governance-2604.26615.ja.md) · [English](research/tdd-governance-2604.26615.md) |
-| AI CI/CD の prompt injection / GitInject survey | [日本語](research/gitinject-2606.09935.ja.md) · [English](research/gitinject-2606.09935.md) |
-| 自作ガード突破の教訓 / Guard-bypass lessons (practitioner report) | [日本語](research/ai-dev-harness-guard-bypass-2610.ja.md) · [English](research/ai-dev-harness-guard-bypass-2610.md) |
+| エージェント実行、HW/SW、TDD、CI/CD / Research topics | [研究資料の索引 / Research index](research/README.md) |
 
 ## 事例と例 / Case study and examples
 
@@ -86,4 +88,4 @@ Root entry points and standard files stay in place. Agent/GitHub metadata and ru
 
 以前のパスを使う外部リンクは更新が必要です。過去 commit を固定した参照は履歴として維持します。旧名の stub はルートに追加せず、この一覧を移動先の案内に使います。External links using old paths need updating; commit-pinned historical references remain unchanged.
 
-Local implementation follow-up (not merged): [2026-10-22 remediation inventory](operations/remediation-status-2026-10-22.md).
+Historical implementation inventory: [2026-10-22 remediation inventory](operations/remediation-status-2026-10-22.md).

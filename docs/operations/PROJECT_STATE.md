@@ -1,5 +1,7 @@
 # Project State
 
+[現行の実行経路](../architecture/overview.md) · [エージェント向けの拡張設計](../agent-workflows/README.ja.md) · [Agent workflow design](../agent-workflows/README.md)
+
 ## Local remediation status (2026-10-22; not merged)
 
 See the [prioritized implementation inventory](remediation-status-2026-10-22.md)
