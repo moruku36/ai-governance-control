@@ -1,43 +1,14 @@
 flowchart TD
-  HUMAN(["人間または外部エージェント<br/>編集する側。マージはしない"])
-  IN["tasks/ ・ config/ ・ schemas/<br/>タスクテンプレート、プロファイル、JSON Schema 契約"]
-
-  subgraph CP["制御プレーン — orchestrator/"]
-    CLI["cli.py ・ core/policy.py<br/>doctor ・ demo ・ status ・ approve ・ cancel<br/>禁止操作つきポリシーエンジン"]
-    SCHED["core/scheduler.py ・ loop.py ・ lease.py<br/>依存関係、実行ループ、リース"]
-    LEDGER[("core/state.py<br/>SQLite 台帳、単一書き込み")]
-    APPROVAL["core/approval.py ・ auth.py<br/>単回使用の署名付き承認"]
-  end
-
-  subgraph EXEC["実行 — adapters/"]
-    MANUAL["manual.py<br/>信頼できる既存の編集"]
-    CONTAINER["container.py<br/>通信遮断 Linux コンテナ"]
-    ANTI["antigravity.py<br/>BLOCKED、代替なし"]
-  end
-
-  RUNTIME[/"runtime-root（リポジトリ外）<br/>Worktree ・ ログ ・ PID ・ 一時DB"/]
-  EVID["core/artifacts.py → verifier.py ・ junit.py<br/>安全な回収、そのあと独立検証<br/>受領が記録するのは COLLECTED のみ"]
-  GITHUB["adapters/github.py<br/>ブランチ公開と PR API"]
-  GATE["scripts/ + .github/workflows/ci.yml<br/>秘密情報スキャン ・ 依存監査 ・ Ruff ・ テスト<br/>コンテナ境界"]
-  PR["プルリクエスト<br/>候補変更 + 証拠"]
-  REVIEW{"人間のレビューと承認"}
-  MAIN[("main<br/>Ruleset で保護")]
-
-  HUMAN --> IN
-  IN --> CLI
-  CLI --> SCHED
-  SCHED <--> LEDGER
-  SCHED --> MANUAL
-  SCHED --> CONTAINER
-  SCHED -.-> ANTI
-  CONTAINER --> RUNTIME
-  MANUAL --> EVID
-  CONTAINER --> EVID
-  EVID --> LEDGER
-  EVID --> GITHUB
-  GITHUB --> PR
-  GATE --> PR
-  PR --> REVIEW
-  APPROVAL --> REVIEW
-  REVIEW -->|"承認、人間がマージ"| MAIN
-  REVIEW -->|"差し戻し"| HUMAN
+    task["制御プレーン<br/>タスクの範囲・ポリシー・台帳・承認"]
+    manual["信頼済みの編集<br/>ManualAdapter・ホスト上の作業コピー"]
+    linux["承認した作業を実行<br/>オフラインの Linux コンテナ"]
+    report["ローカル検査結果<br/>手動デモはここで終了"]
+    verify["成果物の回収と独立検証<br/>検証器が候補を照合"]
+    pr["候補のプルリクエスト<br/>リポジトリの CI 検査"]
+    human["人による判断<br/>レビューと main へのマージ"]
+    task --> manual
+    task --> linux
+    manual --> report
+    linux --> verify
+    verify --> pr
+    pr --> human
