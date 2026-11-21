@@ -51,6 +51,25 @@ sequenceDiagram
 
 Example: if the worker changes the recipient after a reply was approved, it must request a new approval. If a send times out, look up the previous operation at the destination. Return the existing receipt if confirmed; otherwise keep the outcome unknown.
 
+## Available now: synthetic operation previews
+
+The offline [operation intent preview](../../orchestrator/core/operation_intent.py)
+checks a synthetic read, draft or send against a controller-pinned task, requester,
+resource, destination, sending account (where applicable) and input digest.
+Both the requester grant and the task scope must cover the exact same tuple.
+
+The [revision preview](../../orchestrator/core/operation_revision.py) additionally
+checks a claimed draft/send resource revision against an independent prior pin
+and observed resource/revision pair. The [assessment bridge](../../orchestrator/core/operation_assessment_bridge.py)
+gets the operation IDs from an independently pinned assessment record and uses
+the revision preview for draft/send without falling back to v1.
+
+These modules are for synthetic fixtures. A match is `MANUAL_ONLY` with no
+execution authorization. They do not issue approvals, access credentials, call
+external tools, attest to source authenticity, or guarantee the resource has
+not changed again. Live admission, delegation, execution-time revision binding
+and effect verification are not implemented by this path.
+
 ## Delivery and acceptance
 
 | Stage | Reuse | Evidence needed to advance |
