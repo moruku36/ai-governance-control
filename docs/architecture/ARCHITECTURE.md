@@ -1,112 +1,23 @@
 # Architecture Specification (v1.0)
 
-> **要件定義からプルリクエスト作成・人手承認までを安全にオーケストレーションするアーキテクチャ仕様書**
-
----
-
 ## 0. Current vs Target: 読み方の注意
 
-本ドキュメントの図は、**現在実装済みのコンポーネント**と、**将来像として設計はしているが未実装のコンポーネント**を区別せずに描いています。読む際は以下の対応表を先に確認してください。実装の正確な状態は常に `main` の実コードと `PROJECT_STATE.md` が優先します（矛盾時の優先順位は `PROJECT_STATE.md` の「Documentationの優先順位」節を参照）。
-
-| 図中の表記 | 状態 | 実際の対応 |
-| :--- | :--- | :--- |
-| `orchestrator.engine`（ポリシーエンジン / スケジューラ） | ✅ Implemented（名称のみ異なる） | 単一モジュールではなく `orchestrator/core/policy.py`（PolicyEngine）、`orchestrator/core/scheduler.py`、`orchestrator/core/loop.py` に分割実装 |
-| 状態台帳 (SQLite + CAS) | ✅ Implemented | `orchestrator/core/state.py` (`StateLedger`) |
-| 承認トークン管理 | ✅ Implemented | `orchestrator/core/approval.py` (`ApprovalManager`)、`orchestrator/core/auth.py` |
-| 運用 CLI (`doctor` / `status` / `approve` / `cancel`) | ✅ Implemented | `orchestrator/cli.py` |
-| 実行アダプタ (Manual / ApprovedContainer) | ✅ Implemented | `orchestrator/adapters/manual.py`、`orchestrator/adapters/container.py` |
-| 実行アダプタ (Antigravity Native) | ⛔ Blocked | `orchestrator/adapters/antigravity.py` は実機調査の結果 `NativeAntigravityAdapter` をBLOCKEDと確定（公式SDK不在）。暗黙フォールバックは禁止 |
-| Builder / Tester / Reviewer（別Agentプロセス） | 🧪 Conceptual Role | コード上は独立したAgentクラスではなく、`AGENTS.md` が定義するRole制約（`allowed_paths`、ReadOnly等）を実行アダプタ・ポリシーエンジンが強制する形で表現されている |
-| `factory/state` ブランチ (監査投影) | 🚧 Planned | 現時点のリポジトリには存在しない。監査投影は `state/` ディレクトリ配下（`main` ブランチ管理）に置かれている |
-
----
+§1は現在の実行経路、§2以降は制御原則・境界・目標シーケンスを記す。実装の可否は[現在の状態](../operations/PROJECT_STATE.md)とソースで確認する。外部ツールと委譲を含む目標設計には[エージェントの操作ライフサイクル](../agent-workflows/README.ja.md)を用いる。
 
 ## 1. システムアーキテクチャ全体像
 
-AI Governance Control は、自律型 AI エージェントのエンジニアリング作業を、決定論的かつ安全に管理するためのオーケストレーション基盤です。
+![タスクから手動検査または隔離実行に進む現行構成](../diagrams/architecture.ja.svg)
 
-### 全体データフロー & コンポーネント関連図
+| 責務 | 現行実装と範囲 |
+|---|---|
+| タスク・ポリシー・スケジュール | [CLI](../../orchestrator/cli.py)、[PolicyEngine](../../orchestrator/core/policy.py)、[スケジューラー](../../orchestrator/core/scheduler.py)、[実行ループ](../../orchestrator/core/loop.py) |
+| 状態と承認 | [SQLite台帳](../../orchestrator/core/state.py)、[署名承認](../../orchestrator/core/approval.py)、[承認者の認証](../../orchestrator/core/auth.py) |
+| 実行 | [ManualAdapter](../../orchestrator/adapters/manual.py) と [ApprovedContainerAdapter](../../orchestrator/adapters/container.py)。ホスト上の手動デモには隔離がない |
+| 証拠と公開 | [成果物の回収](../../orchestrator/core/artifacts.py)、[独立検証](../../orchestrator/core/verifier.py)、[GitHubアダプター](../../orchestrator/adapters/github.py)。回収票は `COLLECTED` まで |
+| エージェントの役割 | [Builder・Tester・Reviewer](../../AGENTS.md) は責務の定義。独立した3つのエージェントプロセスの実装は計画段階 |
+| 接続の制約 | Antigravityネイティブ接続はBLOCKED。Codex・Claude Codeは外部で生成した編集を手動で引き渡せる。完全差分必須の引き渡しは拒否される |
 
-```mermaid
-flowchart TB
-    subgraph Layer1["① 入力・信頼できる情報源 (Source of Truth)"]
-        Human["🧑‍💻 人間 / アーキテクト\n(PO, Engineers)"]
-        Spec["📋 要件・設計・タスク計画\n(JSON Schema 2020-12 / Tasks)"]
-        MainRepo[("📦 Git main ブランチ\n(検証済みコード・仕様 SoT)")]
-        StateRepo[("📜 🚧Planned: factory/state ブランチ\n(現在は main の state/ 配下に投影)")]
-        Human --> Spec --> MainRepo
-    end
-
-    subgraph Layer2["② 制御プレーン (Control Plane: orchestrator/)"]
-        direction TB
-        Ingest["タスク取込 / 計画読込 / スキーマ検証"]
-        Engine["✅ポリシーエンジン / 依存関係スケジューラ\n(policy.py / scheduler.py / loop.py)"]
-        Lease["リース・並列実行管理 / 承認トークン管理"]
-        Ledger[("状態台帳 (SQLite + CAS)\n単一書き込み (Single Writer)")]
-        PRMgr["PR / 公開管理"]
-        CLI["運用 CLI (doctor / status / approve / cancel)"]
-        
-        Ingest --> Engine <--> Ledger
-        Engine <--> Lease
-        Engine --> PRMgr
-        CLI -.-> Engine
-    end
-
-    subgraph Layer4["④ 実行・隔離境界 (Execution Boundary: runtime-root)"]
-        direction TB
-        Worktree["タスク別 Branch / Worktree\n(一時的・使い捨て実行環境)"]
-        Adapters["実行アダプタ\n(✅Manual / ApprovedContainer, ⛔Antigravity Native: BLOCKED)"]
-        Isolation["ランタイム隔離 / パス逸脱防止\nプロセス管理 / ポート隔離 / 生ログ・PID・一時DB"]
-        Adapters --> Worktree <--> Isolation
-    end
-
-    subgraph Layer3["③ ワーカーレイヤー (Worker Layer: AI Agents) — 🧪Conceptual Role"]
-        Builder["🔨 Builder\n実装・ビルド (allowed_paths)"]
-        Tester["🧪 Tester / Validator\nテスト・検証・証跡生成"]
-        Reviewer["🔍 Reviewer\nレビュー・合否判定 (ReadOnly)"]
-    end
-
-    subgraph Layer5["⑤ 品質・セキュリティゲート (Quality & Security Gate)"]
-        direction TB
-        Ruff["ruff check (Lint / Code Style)"]
-        Pytest["pytest (Unit / Integration Tests)"]
-        Sec["secret_scan.py & audit_dependencies.py"]
-        CI["GitHub Actions CI (Linux / Windows)"]
-        EvidenceGen["真正証跡集約 (Evidence Bundle / SHA-256)"]
-        Ruff & Pytest & Sec & CI --> EvidenceGen
-    end
-
-    subgraph Layer6["⑥ 出力・人手承認 (Output & Human Gate)"]
-        PR["🚀 GitHub Pull Request\n(候補変更 + 真正証跡)"]
-        HumanGate{"🛡️ 人間によるレビュー / 承認\n(Human-in-the-Loop)"}
-        MergedMain[("✅ main 反映\n(自動マージ・自動本番適用なし)")]
-        PR --> HumanGate
-        HumanGate -- "Approved" --> MergedMain
-        HumanGate -- "Rejected" --> Ingest
-    end
-
-    MainRepo --> Ingest
-    Engine ==> Adapters
-    Worktree <--> Builder & Tester & Reviewer
-    Builder & Tester & Reviewer ==> Layer5
-    EvidenceGen ==> PR
-
-    classDef sot fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
-    classDef cp fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
-    classDef worker fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
-    classDef boundary fill:#fbe9e7,stroke:#d84315,stroke-width:2px;
-    classDef gate fill:#e8f5e9,stroke:#388e3c,stroke-width:2px;
-    classDef human fill:#fffde7,stroke:#fbc02d,stroke-width:2px;
-
-    class Layer1 sot;
-    class Layer2 cp;
-    class Layer3 worker;
-    class Layer4 boundary;
-    class Layer5 gate;
-    class Layer6 human;
-```
-
----
+[English overview](../diagrams/architecture.en.svg) · [図のソース](../diagrams/architecture.ja.mmd) · [運用手順](../operations/OPERATIONS.md)
 
 ## 2. 設計の基本原則 (Core Principles)
 
@@ -156,6 +67,8 @@ graph LR
 ---
 
 ## 4. エンドツーエンド処理シーケンス
+
+以下は別々の担当が協働する目標シーケンスである。現行の手動デモとコンテナ経路は§1を参照。
 
 ```mermaid
 sequenceDiagram

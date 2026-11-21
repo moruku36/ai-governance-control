@@ -1,132 +1,48 @@
 # AI Governance Control
 
-[English](README.md) | [日本語](README.ja.md)
+[English](README.md) · [日本語](README.ja.md)
 
-**Experimental / MANUAL_ONLY** · Python 3.11+
+AI Governance Control helps a repository owner decide whether to accept work produced by a person or a coding agent. The task describes what may change, the verifier checks evidence for the candidate, and a human decides whether it belongs on `main`.
 
-[Documentation index / ドキュメント索引](docs/README.md) · [Getting started](docs/getting-started.md) · [Current project state](docs/operations/PROJECT_STATE.md)
+**Experimental · MANUAL_ONLY · Python 3.11+.** You can check a trusted edit today. A bounded Linux worker can run through the approved-container path. Governing an agent that calls external tools or delegates work is the next design step.
 
-> **In one sentence:** AI Governance Control is a control layer for letting AI coding agents — or people — edit your code, without letting anything reach the main branch unverified and unapproved.
+| What do you want to do? | Where to start |
+|---|---|
+| Check a change made by a person, Codex or Claude Code | [Run the local demo](docs/getting-started.md) |
+| Run a registered job in an offline Linux container | [Approved container loop](docs/operations/APPROVED_CONTAINER_LOOP.md) |
+| Design a read-only assistant, a tool-using agent or a delegated task | [Agent workflows and proposed controls](docs/agent-workflows/README.md) |
+| Decide which guarantees apply in your environment | [Project state](docs/operations/PROJECT_STATE.md) · [Compatibility](docs/compatibility/matrix.md) |
 
-## What this is
+## How work reaches review
 
-When an AI agent edits code, speed is not the problem. Trust is. A change can look finished and still be wrong, out of scope, or impossible to trace afterwards.
+![Today’s two routes. A trusted edit ends in a local check summary. In the approved Linux route, collected artifacts are independently verified before a candidate is presented for PR checks and human review.](docs/diagrams/architecture.en.svg)
 
-This project sits between the agent and your repository. Every change starts as a registered task, is checked by an independent verifier, and becomes a pull request with the evidence attached. A human reviews that evidence and approves — and only a human merges.
-
-It does **not** write code by itself, and it never merges or deploys automatically. It is the gate around the work, not the worker.
-
-## Why it exists
-
-- Agents produce changes faster than humans can review them.
-- A change that "looks done" is not the same as a verified change.
-- Fully automatic pipelines remove the point where a human can stop a bad change before it lands.
-
-AI Governance Control keeps that stopping point, and makes it strict: high-impact changes need a signed, single-use human approval, and if a required check or control is unavailable, the system stops (fails closed) instead of silently falling back to a weaker mode.
-
-## How it works
-
-1. **Register a task** — what may change, and under which policy.
-2. **Make the edit** — a person or an external agent edits, manually or inside an offline Linux container.
-3. **Collect and verify** — the results are collected and checked by an independent verifier.
-4. **Open a PR with evidence** — the change and its verification results are presented for review.
-5. **Human approval** — a human reviews and approves with a single-use signed approval. Only a human merges to `main`.
-
-![Architecture diagram: a person or external agent submits a task through the CLI; the control plane (policy, scheduler, SQLite ledger, signed approvals) runs a manual or offline-container adapter; artifacts are collected and independently verified; a PR with evidence goes to human review, and only a human merges to main](docs/diagrams/architecture.en.svg)
-
-<sub>Rendered with [Pele](https://pele.run/) from the [Mermaid source](docs/diagrams/architecture.en.mmd). The authoritative specification is [ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md).</sub>
-
-## What it does not do
-
-- It does not write code autonomously.
-- No automatic merge, no automatic deploy.
-- No native Claude Code or Codex adapters. Antigravity is blocked in the current product.
-
-## Structure
-
-- `orchestrator/`: state, policy, execution, approval, GitHub checks
-- `schemas/`, `tasks/`, `config/`, `tests/`, `scripts/`, `.github/`: contracts, templates, CI
-- `docs/`: details. Databases, logs, and credentials stay outside the repo.
-
-## Current status
-
-**Implemented**
-
-- Task schema and scheduling
-- Offline Linux container execution, collection of results, and an independent verifier
-- Single-use signed human approvals, recorded in a journal
-- Branch and PR API
-- Note: receipts record only `COLLECTED` — never `VERIFIED` or `COMPLETE`
-- Windows credential and RunPod startup code exists but is off by default and needs separate human approval
-
-**Not provided**
-
-- Automatic merge or deploy
-- Native Claude Code or Codex adapters (Antigravity is blocked in the current product)
-
-**Limits and unverified**
-
-- Complete-diff handling is limited, and handoff rejects such tasks
-- Isolation is Linux-only
-- CI covers ordinary Ubuntu and Windows; macOS and WSL2 are unverified
-- Synthetic tests are not proof of live keys, GPUs, Windows Hello, or Mattermost
-- Stopping a process does not prove Pod deletion or billing has stopped
+[Diagram source](docs/diagrams/architecture.en.mmd) · [Architecture specification](docs/architecture/ARCHITECTURE.md)
 
 ### Safety model
 
-High-impact changes need human approval. The product fails closed: if a required check or control is unavailable, it stops instead of silently falling back to a weaker mode. Secrets stay out of chat and logs.
+The local demo runs registered validation commands against an existing worktree. Use it with trusted code. It runs on the host and does not enforce task path restrictions. On the isolated path, a collection receipt means `COLLECTED`; the independent verifier makes its own decision. Handoffs requiring complete-diff verification are currently refused. High-impact operations require human approval. The product reserves merging for a human and supports no automatic deployment.
 
-### Project history
+## Try the local demo
 
-The display name changed (formerly AI Engineering Factory). The repository is now `moruku36/ai-governance-control`; the package and CLI are unchanged. See the [URL migration plan](docs/operations/repository-url-migration.md).
-
-## Quick start
-
-Use a Python 3.11+ virtualenv and activate it as described in the quickstart.
+From a clone, activate a Python 3.11+ virtual environment, then run:
 
 ```bash
-git clone https://github.com/moruku36/ai-governance-control.git
-cd ai-governance-control
 pip install -e ".[dev]"
 python -m orchestrator.cli doctor
 python -m orchestrator.cli demo --task-file tasks/templates/basic-task.yaml --worktree .
 ```
 
-`doctor` exit code 2 is expected when checks pass (MANUAL_ONLY). The demo only checks trusted, existing edits: no AI launch, isolation, path enforcement, or independent evidence.
+A healthy `MANUAL_ONLY` installation returns exit code 2 from `doctor`. The demo prints its own result. For installation, your own repository, and how to read the output, follow the [walkthrough](docs/getting-started.md).
 
-## Docs
+## Repository map
 
-[Project state](docs/operations/PROJECT_STATE.md) · [Architecture](docs/architecture/ARCHITECTURE.md) · [Operations](docs/operations/OPERATIONS.md) · [Security](SECURITY.md) · [Quickstart](docs/getting-started.md) · [Adapters](docs/adapters/README.md) · [Compatibility](docs/compatibility/matrix.md) · [Handoff](docs/operations/HANDOFF_V01.md) · [Startup credentials (Japanese)](docs/security/runpod-startup-credential.ja.md)
+| Folder | What it owns |
+|---|---|
+| [tasks](tasks/) · [schemas](schemas/) · [config](config/) | Task examples, validation contracts and execution profiles |
+| [orchestrator/core](orchestrator/core/) · [orchestrator/adapters](orchestrator/adapters/) | Policy, leases, ledger, approvals, verification and adapter implementations |
+| [tests](tests/) · [scripts](scripts/) | Tests and the checks used in CI |
+| [docs/agent-workflows](docs/agent-workflows/) · [docs/architecture](docs/architecture/) | Agent use cases, proposed action lifecycle, current architecture and roadmap |
+| [docs/operations](docs/operations/) · [docs/security](docs/security/) · [docs/research](docs/research/) | Operator guides, trust boundaries and research notes |
 
-Future plans (not implemented): [Governance roadmap](docs/architecture/governance-roadmap.md) · [TDD research survey](docs/research/tdd-governance-2604.26615.md) · [AI CI/CD prompt-injection survey](docs/research/gitinject-2606.09935.md).
-
-Japanese planning notes (not implemented): [Requirements-to-merge handoff plan](docs/architecture/bounded-factory-plan.ja.md) · [Cloudflare and personal-agent boundary research](docs/research/cloudflare-personal-agent-boundaries.ja.md). These extend G1–G5 without enabling autonomous merge, deployment, or company connectivity.
-
-[MIT License](LICENSE)
-
----
-
-<details>
-<summary><strong>Future Research — agent runtime and HW/SW verification (2026-10-13)</strong> — proposed, not implemented or reproduced</summary>
-
-This supplements the [G1–G5 governance roadmap](docs/architecture/governance-roadmap.md); it does not enable autonomous coding, merging or deployment.
-
-### Research inputs
-
-- [OpenClaw and Ollama in Agentic AI: Toward Fully Autonomous and Scalable AI Agent Systems](https://arxiv.org/abs/2607.28629v1) (Roumeliotis / Sapkota): layered agent architecture is relevant to the boundary between worker inference and this project's control plane. [Accessible manuscript](https://www.researchgate.net/publication/411138539_OpenClaw_and_Ollama_in_Agentic_AI_Toward_Fully_Autonomous_and_Scalable_AI_Agent_Systems) and [current author code](https://github.com/Applied-AI-Research-Lab/OpenClaw-and-Ollama-in-Agentic-AI) are different evaluation snapshots; do not combine their reported results.
-- [Accelerating Post-Quantum Cryptography via LLM-Driven Hardware-Software Co-Design](https://arxiv.org/html/2602.09410v1) (Liao / Adegbija / Lysecky), Sections III–IV: profiling and generated Verilog provide a candidate domain for external-tool verification. Constant-time and side-channel properties were not formally established.
-
-These are **project proposals**, not features demonstrated in this repository. A JSON checkpoint is our adaptation, not a confirmed named Memory Anchor technique from the OpenClaw manuscript.
-
-| Existing stage | Proposed extension | Acceptance criterion |
-|---|---|---|
-| G1 — contracts | Define worker proposal, trusted task checkpoint and evidence as separate versioned artifacts. Bind each to task, approved requirement, full candidate, runtime/tool profile and budgets. Reuse the complete-diff foundation. | Wrong task, stale candidate, altered policy, corrupt state or missing provenance blocks admission. A checkpoint never grants permissions or promotes COLLECTED to VERIFIED. |
-| G2 — approval | Keep action authorization and acceptance-oracle ownership outside the generating model; bind proposed memory/checkpoint changes to the existing review and approval contract. | Injected notes or tool output cannot expand scope, overwrite accepted tests or approve a candidate. Any changed approved criterion invalidates affected evidence and approvals. |
-| G4 — pilot | Compare a bounded local worker with and without persistence under the same model, input, tools and independent oracle. Include restart, stale-state, scope-violation and poisoned-memory scenarios. | Record all trials, independently checked effects, failures, cost, latency and restoration. A favorable prototype score does not imply production reliability or general injection resistance. |
-| G4 — optional HW/SW exercise | Add a separately scoped HDL verification profile for one small public arithmetic kernel. Compare generated Verilog, reference C and an explicitly configured HLS baseline. | Trusted reference vectors and corner cases are independently supplied; syntax/lint, simulation, reference equivalence and synthesis/timing evidence remain separate. Generator-authored tests are supplemental, not the sole oracle. |
-| G4 — security evidence | Track functional correctness, timing closure, constant-time analysis and side-channel evaluation as distinct claims. Preserve unsupported checks as unknown. | Simulation or fixed pipeline latency cannot satisfy an unperformed cryptographic security check. Reports state tool versions, target, constraints and limitations. |
-| G5 — adapter | Consider one allowlisted profiler/simulator/synthesis adapter only after preceding gates. Include image/license availability, runtime limits, output bounds, fixed argv and cleanup. | Missing tools or licenses block required evidence; retries preserve cumulative budgets. No arbitrary shell, cloud provisioning, credential exposure or automatic production accelerator deployment. |
-
-**First milestone:** a manual offline reference-versus-candidate exercise with independent expected results and recorded failure cases. FPGA acquisition, live integration and production cryptographic use require separate plans. Native Sidekick/OpenClaw adapters remain unimplemented.
-
-</details>
+[Documentation index](docs/README.md) · [Adapters](docs/adapters/README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Project history](docs/operations/repository-url-migration.md) · [MIT license](LICENSE)
