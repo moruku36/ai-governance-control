@@ -8,8 +8,10 @@ runtime isolation, or evidence authenticity. Never use its result for admission.
 """
 
 import json
-from dataclasses import dataclass
-from typing import Any
+import re
+from dataclasses import dataclass, field
+from hmac import compare_digest
+from typing import Any, Literal
 
 from orchestrator.core.assessment import AssessmentError, validate_assessment
 from orchestrator.core.operation_intent import (
@@ -26,6 +28,7 @@ from orchestrator.core.operation_revision import (
 
 ASSESSMENT_PURPOSE = "synthetic_operation_preview"
 _SYNTHETIC_ACTIONS = frozenset({"read", "draft", "send"})
+_SHA256 = re.compile(r"[a-f0-9]{64}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +39,22 @@ class AssessmentPin:
     candidate_seal_digest: str
     policy_digest: str
     assessment_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewedOperationContext:
+    """Controller-held snapshot of a prior fixture review, not an approval."""
+
+    assessment_digest: str
+    intent: OperationIntent
+    target_revision: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewConsistency:
+    reason: str
+    mode: Literal["MANUAL_ONLY"] = field(init=False, default="MANUAL_ONLY")
+    execution_authorized: Literal[False] = field(init=False, default=False)
 
 
 def evaluate_assessed_operation(
@@ -105,3 +124,59 @@ def evaluate_assessed_operation(
         observed_revision=observed_revision,
         **args,
     )
+
+
+def evaluate_review_consistency(
+    proposal: bytes,
+    *,
+    assessment: dict[str, Any],
+    pin: AssessmentPin,
+    expected: OperationIntent,
+    observed_input: bytes,
+    requester_grant: frozenset[OperationScope],
+    task_scope: frozenset[OperationScope],
+    reviewed: ReviewedOperationContext,
+    expected_revision: str | None = None,
+    observed_revision: ObservedRevision | None = None,
+) -> ReviewConsistency:
+    """Compare a current draft/send preview to a separately retained fixture snapshot.
+
+    Never build `reviewed` from the new proposal or current controller snapshot.
+    This check does not verify a human reviewer, expiry, revocation or a signature,
+    and provides neither an approval token nor a result usable for admission.
+    """
+    if (
+        type(reviewed) is not ReviewedOperationContext
+        or type(reviewed.assessment_digest) is not str
+        or _SHA256.fullmatch(reviewed.assessment_digest) is None
+        or type(reviewed.intent) is not OperationIntent
+        or type(reviewed.target_revision) is not str
+    ):
+        return ReviewConsistency("INVALID_REVIEW_CONTEXT")
+    if type(expected) is OperationIntent and expected.action == "read":
+        return ReviewConsistency("MUTABLE_ACTION_REQUIRED")
+
+    current = evaluate_assessed_operation(
+        proposal,
+        assessment=assessment,
+        pin=pin,
+        expected=expected,
+        observed_input=observed_input,
+        requester_grant=requester_grant,
+        task_scope=task_scope,
+        expected_revision=expected_revision,
+        observed_revision=observed_revision,
+    )
+    if current.matched_intent is None:
+        return ReviewConsistency(current.reason)
+    if type(current) is not RevisionAssessment or current.matched_revision is None:
+        return ReviewConsistency("REVISION_PREVIEW_REQUIRED")
+    # The full assessment digest also binds its validated task, repository,
+    # specification, candidate seal and policy. It is not a policy-only digest.
+    if not compare_digest(reviewed.assessment_digest, pin.assessment_digest):
+        return ReviewConsistency("REVIEW_ASSESSMENT_MISMATCH")
+    if reviewed.intent != current.matched_intent:
+        return ReviewConsistency("REVIEW_INTENT_MISMATCH")
+    if reviewed.target_revision != current.matched_revision:
+        return ReviewConsistency("REVIEW_REVISION_MISMATCH")
+    return ReviewConsistency("EXACT_REVIEW_CONTEXT_MATCH")

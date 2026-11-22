@@ -64,6 +64,15 @@ and observed resource/revision pair. The [assessment bridge](../../orchestrator/
 gets the operation IDs from an independently pinned assessment record and uses
 the revision preview for draft/send without falling back to v1.
 
+The same module's `evaluate_review_consistency` recomputes the current
+draft/send preview and compares its full intent, target revision and assessment
+digest with a separately retained fixture snapshot. The snapshot binds only
+that operation, not the complete grant sets or their provenance.
+A changed destination, for example, does not match the prior snapshot even if
+the current fixture scopes now cover it. Do not construct the prior snapshot
+from the current proposal or current pins. A match does not prove that anyone
+reviewed the operation, authenticate an approver, or verify expiry or revocation.
+
 These modules are for synthetic fixtures. A match is `MANUAL_ONLY` with no
 execution authorization. They do not issue approvals, access credentials, call
 external tools, attest to source authenticity, or guarantee the resource has
