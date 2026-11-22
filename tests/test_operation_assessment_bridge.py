@@ -15,6 +15,12 @@ from orchestrator.core.operation_assessment_bridge import (
 )
 from orchestrator.core.operation_intent import VERSION as V1
 from orchestrator.core.operation_intent import OperationIntent
+from orchestrator.core.operation_review_validity import (
+    FixtureOperatorObservation,
+    FixtureReviewCheck,
+    FixtureTimedReview,
+    evaluate_fixture_review_validity,
+)
 from orchestrator.core.operation_revision import VERSION as V2
 from orchestrator.core.operation_revision import ObservedRevision
 
@@ -297,3 +303,155 @@ class TestOperationReviewConsistency(unittest.TestCase):
         ):
             with self.subTest(review_type=type(invalid).__name__):
                 self.assert_reason("INVALID_REVIEW_CONTEXT", reviewed=invalid)
+
+
+TIMED_REVIEW = FixtureTimedReview(
+    REVIEWED_SEND, "fixture:principal:reviewer", "fixture:revision:activation-1", 100, 200
+)
+CURRENT_CHECK = FixtureReviewCheck(150, "fixture:revision:registry-2")
+CURRENT_OPERATOR = FixtureOperatorObservation(
+    "fixture:principal:reviewer", "fixture:revision:activation-1", "fixture:revision:registry-2", "active"
+)
+
+
+class TestFixtureReviewValidity(unittest.TestCase):
+    def assert_preview(
+        self,
+        reason,
+        *,
+        review=TIMED_REVIEW,
+        check=CURRENT_CHECK,
+        operator=CURRENT_OPERATOR,
+        intent=SEND,
+        revision=REVISION,
+        record=None,
+        pin=PIN,
+        raw=None,
+        **overrides,
+    ):
+        result = evaluate_fixture_review_validity(
+            wire(intent, revision=revision) if raw is None else raw,
+            assessment=record_fixture() if record is None else record,
+            pin=pin,
+            review=review,
+            check=check,
+            operator=operator,
+            **{
+                "expected": intent,
+                "observed_input": BODY,
+                "requester_grant": frozenset({intent.scope_key}),
+                "task_scope": frozenset({intent.scope_key}),
+                "expected_revision": revision,
+                "observed_revision": ObservedRevision(intent.target_id, revision),
+                **overrides,
+            },
+        )
+        self.assertEqual(result.reason, reason)
+        self.assertEqual(result.mode, "MANUAL_ONLY")
+        self.assertIs(result.execution_authorized, False)
+        self.assertIs(result.approval_verified, False)
+
+    def test_issuance_inclusive_expiry_exclusive_with_no_authority(self):
+        for checked_at, reason in (
+            (99, "REVIEW_NOT_YET_VALID"),
+            (100, "FIXTURE_REVIEW_CURRENT"),
+            (199, "FIXTURE_REVIEW_CURRENT"),
+            (200, "REVIEW_EXPIRED"),
+            (201, "REVIEW_EXPIRED"),
+        ):
+            with self.subTest(checked_at=checked_at):
+                self.assert_preview(reason, check=replace(CURRENT_CHECK, checked_at=checked_at))
+
+    def test_same_rules_apply_to_synthetic_draft(self):
+        reviewed_draft = ReviewedOperationContext(PIN.assessment_digest, DRAFT, REVISION)
+        review = replace(TIMED_REVIEW, reviewed=reviewed_draft)
+        self.assert_preview("FIXTURE_REVIEW_CURRENT", intent=DRAFT, review=review)
+        self.assert_preview(
+            "REVIEW_EXPIRED",
+            intent=DRAFT,
+            review=review,
+            check=replace(CURRENT_CHECK, checked_at=TIMED_REVIEW.expires_at),
+        )
+
+    def test_changed_context_cannot_inherit_current_operator_or_valid_window(self):
+        changed = replace(SEND, destination_id="fixture:recipient:other")
+        self.assert_preview("REVIEW_INTENT_MISMATCH", intent=changed)
+        self.assert_preview("REVIEW_REVISION_MISMATCH", revision="fixture:revision:r2")
+        updated_body = b"other synthetic input"
+        amended = replace(SEND, input_sha256=sha256(updated_body).hexdigest())
+        self.assert_preview("REVIEW_INTENT_MISMATCH", intent=amended, observed_input=updated_body)
+        for record_field, pin_field in (
+            ("candidate_digest", "candidate_seal_digest"),
+            ("policy_digest", "policy_digest"),
+        ):
+            with self.subTest(field=record_field):
+                record = {**record_fixture(), record_field: "f" * 64}
+                updated_pin = replace(repin(record), **{pin_field: "f" * 64})
+                self.assert_preview("REVIEW_ASSESSMENT_MISMATCH", record=record, pin=updated_pin)
+
+    def test_review_does_not_override_current_fixture_checks(self):
+        self.assert_preview("OUTSIDE_REQUESTER_GRANT", requester_grant=frozenset())
+        self.assert_preview("OUTSIDE_TASK_SCOPE", task_scope=frozenset())
+        self.assert_preview("UNKNOWN_VERSION", raw=wire(SEND, V1))
+        self.assert_preview("MUTABLE_ACTION_REQUIRED", intent=READ)
+
+    def test_revocation_supersedes_active_observation_at_older_registry_revision(self):
+        next_check = replace(CURRENT_CHECK, expected_registry_revision="fixture:revision:registry-3")
+        revoked = replace(
+            CURRENT_OPERATOR, registry_revision="fixture:revision:registry-3", status="revoked"
+        )
+        self.assert_preview("REVIEWER_REVOKED", check=next_check, operator=revoked)
+        self.assert_preview("REVIEWER_REGISTRY_REVISION_MISMATCH", check=next_check)
+        self.assert_preview("REVIEWER_OBSERVATION_UNAVAILABLE", check=next_check, operator=None)
+
+    def test_current_reactivation_does_not_revive_previous_epoch_review(self):
+        next_check = replace(CURRENT_CHECK, expected_registry_revision="fixture:revision:registry-4")
+        reactivated = replace(
+            CURRENT_OPERATOR,
+            registry_revision="fixture:revision:registry-4",
+            reviewer_epoch="fixture:revision:activation-2",
+        )
+        self.assert_preview("REVIEWER_EPOCH_MISMATCH", check=next_check, operator=reactivated)
+
+    def test_unrelated_operator_cannot_attest_and_requester_cannot_review_own_fixture(self):
+        self.assert_preview(
+            "REVIEWER_ID_MISMATCH",
+            operator=replace(CURRENT_OPERATOR, reviewer_id="fixture:principal:other"),
+        )
+        self.assert_preview(
+            "REVIEWER_IS_REQUESTER",
+            review=replace(TIMED_REVIEW, reviewer_id=SEND.principal_id),
+            operator=replace(CURRENT_OPERATOR, reviewer_id=SEND.principal_id),
+        )
+
+    def test_missing_or_malformed_independent_clock_and_window_are_not_defaulted(self):
+        for check in (
+            None,
+            asdict(CURRENT_CHECK),
+            replace(CURRENT_CHECK, checked_at=-1),
+            replace(CURRENT_CHECK, checked_at=True),
+            replace(CURRENT_CHECK, checked_at=1.5),
+            replace(CURRENT_CHECK, expected_registry_revision="latest"),
+        ):
+            self.assert_preview("INVALID_VALIDITY_CHECK", check=check)
+        for review in (
+            None,
+            asdict(TIMED_REVIEW),
+            replace(TIMED_REVIEW, issued_at=-1),
+            replace(TIMED_REVIEW, issued_at=200),
+            replace(TIMED_REVIEW, expires_at=99),
+            replace(TIMED_REVIEW, expires_at=True),
+            replace(TIMED_REVIEW, reviewer_epoch=None),
+        ):
+            self.assert_preview("INVALID_REVIEW_WINDOW", review=review)
+        self.assert_preview("INVALID_REVIEW_CONTEXT", review=replace(TIMED_REVIEW, reviewed=None))
+
+    def test_malformed_registry_status_or_revision_is_not_active(self):
+        for operator in (
+            asdict(CURRENT_OPERATOR),
+            replace(CURRENT_OPERATOR, status="unknown"),
+            replace(CURRENT_OPERATOR, status=True),
+            replace(CURRENT_OPERATOR, registry_revision="latest"),
+            replace(CURRENT_OPERATOR, reviewer_epoch=""),
+        ):
+            self.assert_preview("INVALID_REVIEWER_OBSERVATION", operator=operator)

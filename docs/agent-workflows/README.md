@@ -73,6 +73,16 @@ the current fixture scopes now cover it. Do not construct the prior snapshot
 from the current proposal or current pins. A match does not prove that anyone
 reviewed the operation, authenticate an approver, or verify expiry or revocation.
 
+The separate [fixture validity preview](../../orchestrator/core/operation_review_validity.py)
+first requires that same exact operation review. It then checks the retained
+review window against an independently supplied UTC second (issuance inclusive,
+expiry exclusive) and compares the same reviewer's status to an independently
+pinned registry revision. A revoked reviewer, the requester reviewing their
+own fixture, or an active reviewer in a different activation epoch does not
+match. Reactivation must carry a new epoch; the preview never reactivates an
+older review. It does not read a real clock or registry, authenticate a human,
+verify a signature, or wire a gate into the CLI/API. It stays `MANUAL_ONLY`.
+
 These modules are for synthetic fixtures. A match is `MANUAL_ONLY` with no
 execution authorization. They do not issue approvals, access credentials, call
 external tools, attest to source authenticity, or guarantee the resource has
