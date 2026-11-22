@@ -79,6 +79,24 @@ external tools, attest to source authenticity, or guarantee the resource has
 not changed again. Live admission, delegation, execution-time revision binding
 and effect verification are not implemented by this path.
 
+### Synthetic support-draft outcome
+
+The offline [draft outcome preview](../../orchestrator/core/operation_draft_outcome.py)
+compares a separately retained fixture attempt to one independent fixture
+readback. Only a matching attempt ID, draft target and store can yield a
+confirmed or failed outcome, and the independently observed pre-dispatch
+revision used by the attempt must match the retained expected revision.
+Do not copy that revision from the expectation or substitute the post-save or
+current resource revision. Confirmation also requires the stored bytes to
+match the pinned input digest. Missing or conflicting evidence stays unknown,
+and pre-dispatch denial and cancellation remain distinct from failure.
+After dispatch, cancellation alone does not establish whether the draft was saved.
+
+This draft-only preview neither writes or reads a destination nor recovers
+a real journal. It does not establish source authenticity, attempt ID
+uniqueness, freshness, or duplicate-effect prevention. It stays
+`MANUAL_ONLY` and never authorizes execution or retry.
+
 ## Delivery and acceptance
 
 | Stage | Reuse | Evidence needed to advance |

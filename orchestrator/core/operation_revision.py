@@ -54,7 +54,8 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return obj
 
 
-def _is_revision(value: object) -> bool:
+def is_fixture_revision(value: object) -> bool:
+    """Check the canonical synthetic revision identifier; not freshness evidence."""
     return type(value) is str and _REVISION.fullmatch(value) is not None
 
 
@@ -72,7 +73,7 @@ def _project_for_base_checks(proposal: bytes) -> tuple[bytes, str]:
     revision = obj.pop("target_revision", None)
     if revision is None:
         raise InvalidProposal("TARGET_REVISION_MISSING")
-    if not _is_revision(revision):
+    if not is_fixture_revision(revision):
         raise InvalidProposal("INVALID_TARGET_REVISION")
 
     # Only the revision and version differ. All other fields, including an
@@ -114,9 +115,9 @@ def evaluate_revision_bound_operation(
         return RevisionAssessment(base.reason)
     if intent.action not in _MUTABLE_ACTIONS:
         return RevisionAssessment("MUTABLE_ACTION_REQUIRED")
-    if not _is_revision(expected_revision):
+    if not is_fixture_revision(expected_revision):
         return RevisionAssessment("EXPECTED_REVISION_UNAVAILABLE")
-    if type(observed_revision) is not ObservedRevision or not _is_revision(
+    if type(observed_revision) is not ObservedRevision or not is_fixture_revision(
         observed_revision.revision
     ):
         return RevisionAssessment("OBSERVED_REVISION_UNAVAILABLE")
