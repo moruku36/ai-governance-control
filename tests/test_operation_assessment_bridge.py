@@ -9,7 +9,9 @@ from orchestrator.core.assessment import assessment_digest
 from orchestrator.core.operation_assessment_bridge import (
     ASSESSMENT_PURPOSE,
     AssessmentPin,
+    ReviewedOperationContext,
     evaluate_assessed_operation,
+    evaluate_review_consistency,
 )
 from orchestrator.core.operation_intent import VERSION as V1
 from orchestrator.core.operation_intent import OperationIntent
@@ -77,11 +79,11 @@ PIN = AssessmentPin(
 )
 
 
-def wire(intent, version=None):
+def wire(intent, version=None, *, revision=REVISION):
     chosen = version or (V1 if intent.action == "read" else V2)
     value = {"version": chosen, **asdict(intent)}
     if chosen == V2:
-        value["target_revision"] = REVISION
+        value["target_revision"] = revision
     return json.dumps(value).encode()
 
 
@@ -199,3 +201,99 @@ class TestOperationAssessmentBridge(unittest.TestCase):
         )
         self.assert_result(preview(requester_grant=frozenset()), "OUTSIDE_REQUESTER_GRANT")
         self.assert_result(preview(task_scope=frozenset()), "OUTSIDE_TASK_SCOPE")
+
+
+# This fixture stands in for a controller snapshot retained at prior review.
+# No approval is issued, and it is not derived from any current proposal below.
+REVIEWED_SEND = ReviewedOperationContext(PIN.assessment_digest, SEND, REVISION)
+
+
+class TestOperationReviewConsistency(unittest.TestCase):
+    def check_review(
+        self,
+        *,
+        intent=SEND,
+        revision=REVISION,
+        record=None,
+        pin=PIN,
+        reviewed=REVIEWED_SEND,
+        raw=None,
+        **overrides,
+    ):
+        return evaluate_review_consistency(
+            wire(intent, revision=revision) if raw is None else raw,
+            assessment=record_fixture() if record is None else record,
+            pin=pin,
+            reviewed=reviewed,
+            **{
+                "expected": intent,
+                "observed_input": BODY,
+                "requester_grant": frozenset({intent.scope_key}),
+                "task_scope": frozenset({intent.scope_key}),
+                "expected_revision": revision,
+                "observed_revision": ObservedRevision(intent.target_id, revision),
+                **overrides,
+            },
+        )
+
+    def assert_reason(self, reason, **options):
+        result = self.check_review(**options)
+        self.assertEqual(result.reason, reason)
+        self.assertEqual(result.mode, "MANUAL_ONLY")
+        self.assertIs(result.execution_authorized, False)
+
+    def test_exact_review_context_is_never_authorization(self):
+        self.assert_reason("EXACT_REVIEW_CONTEXT_MATCH")
+
+    def test_unrelated_current_scope_entries_do_not_change_the_review_match(self):
+        self.assert_reason(
+            "EXACT_REVIEW_CONTEXT_MATCH",
+            requester_grant=frozenset({SEND.scope_key, DRAFT.scope_key}),
+            task_scope=frozenset({SEND.scope_key, READ.scope_key}),
+        )
+
+    def test_fresh_intent_cannot_inherit_prior_review_for_different_scope(self):
+        for name, changed in (
+            ("action", DRAFT),
+            ("requester", replace(SEND, principal_id="fixture:principal:other")),
+            ("target", replace(SEND, target_id="fixture:draft:other")),
+            ("recipient", replace(SEND, destination_id="fixture:recipient:other")),
+            ("account", replace(SEND, source_account_id="fixture:account:other")),
+        ):
+            with self.subTest(changed=name):
+                self.assert_reason("REVIEW_INTENT_MISMATCH", intent=changed)
+
+    def test_fresh_input_does_not_replace_reviewed_input(self):
+        updated_body = b"updated synthetic input"
+        updated = replace(SEND, input_sha256=sha256(updated_body).hexdigest())
+        self.assert_reason("REVIEW_INTENT_MISMATCH", intent=updated, observed_input=updated_body)
+
+    def test_fresh_target_revision_does_not_replace_reviewed_revision(self):
+        self.assert_reason("REVIEW_REVISION_MISMATCH", revision="fixture:revision:r2")
+
+    def test_current_policy_and_record_can_agree_but_differ_from_prior_review(self):
+        record = {**record_fixture(), "policy_digest": "f" * 64}
+        updated_pin = replace(repin(record), policy_digest=record["policy_digest"])
+        self.assert_reason("REVIEW_ASSESSMENT_MISMATCH", record=record, pin=updated_pin)
+
+    def test_matching_review_does_not_override_current_checks(self):
+        self.assert_reason("OUTSIDE_REQUESTER_GRANT", requester_grant=frozenset())
+        self.assert_reason("OUTSIDE_TASK_SCOPE", task_scope=frozenset())
+        self.assert_reason("OBSERVED_REVISION_UNAVAILABLE", observed_revision=None)
+        self.assert_reason("ASSESSMENT_REJECTED", record={**record_fixture(), "unknowns": ["new"]})
+        self.assert_reason("UNKNOWN_VERSION", raw=wire(SEND, V1))
+
+    def test_read_does_not_enter_mutable_review_preview(self):
+        self.assert_reason("MUTABLE_ACTION_REQUIRED", intent=READ)
+        self.assertEqual(preview().reason, "EXACT_INTENT_MATCH")
+
+    def test_wrong_or_malformed_review_context_is_not_accepted(self):
+        for invalid in (
+            None,
+            asdict(REVIEWED_SEND),
+            replace(REVIEWED_SEND, assessment_digest="not-a-sha256"),
+            replace(REVIEWED_SEND, intent=None),
+            replace(REVIEWED_SEND, target_revision=None),
+        ):
+            with self.subTest(review_type=type(invalid).__name__):
+                self.assert_reason("INVALID_REVIEW_CONTEXT", reviewed=invalid)
