@@ -117,3 +117,17 @@ uniqueness, freshness, or duplicate-effect prevention. It stays
 | G5 · One external adapter | [Adapter boundary](../adapters/README.md) and [governance roadmap](../architecture/governance-roadmap.md) | Demonstrate bounded access, cancellation and audit on one owner-controlled read-only integration. Decide write access separately |
 
 Candidate, assessment and approval-preview contracts can be checked independently today. Connecting them to tool admission and verifying external effects are implementation milestones. See [project state](../operations/PROJECT_STATE.md) for current guarantees.
+
+### Synthetic delegation scope
+
+The [read delegation preview](../../orchestrator/core/operation_read_delegation.py)
+compares a proposed child's exact `(read, document, audience, None)` entries to
+a separately retained direct parent's scope. It also checks the controller's
+independent parent–child task and principal linkage. A document and an audience
+listed separately cannot be combined into a new pair. Empty, duplicate or
+malformed entries and an already-delegated parent are rejected.
+
+A match is `MANUAL_ONLY`, not a grant, delegation approval or admission
+decision. The caller must provide the retained scope and linkage independently
+of the proposal. This checks no identity proof, provenance, expiry, budget
+or cancellation and does not implement G3.
