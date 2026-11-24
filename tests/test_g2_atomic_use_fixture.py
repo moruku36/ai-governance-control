@@ -399,7 +399,25 @@ def test_controller_cannot_interleave_a_writer_once_use_time_check_starts(enroll
     assert _observed(database) == _recorded(token_id)
 
 
-def test_use_waiting_for_controller_observes_the_new_generation(enrolled, monkeypatch):
+@pytest.mark.parametrize(
+    "change,reason",
+    [
+        (
+            "UPDATE fixture_observation SET generation = generation + 1 WHERE subject = ?",
+            "FIXTURE_GENERATION_CHANGED",
+        ),
+        (
+            "UPDATE fixture_observation SET now_at_use = 1800000010 WHERE subject = ?",
+            "FIXTURE_USE_TIME_EXPIRED",
+        ),
+        (
+            "DELETE FROM fixture_observation WHERE subject = ?",
+            "FIXTURE_SOURCE_UNAVAILABLE",
+        ),
+    ],
+    ids=["new-generation", "at-expiry", "missing-current-source"],
+)
+def test_use_observes_the_controller_change_before_recording(enrolled, monkeypatch, change, reason):
     database, payload, token_id = enrolled
     raw = _json(payload)
     assert preview_signed_review(raw).reason == "FIXTURE_SIGNED_REVIEW_MATCH"
@@ -420,10 +438,19 @@ def test_use_waiting_for_controller_observes_the_new_generation(enrolled, monkey
         closing(real_connect(database, isolation_level=None)) as controller,
         ThreadPoolExecutor(max_workers=1) as worker,
     ):
+        # This earlier good observation cannot suffice once use begins.
+        previous = controller.execute(
+            "SELECT available, generation, now_at_use FROM fixture_observation WHERE subject = ?",
+            (_subject_key(),),
+        ).fetchone()
+        assert previous == (1, 1, 1_800_000_000)
+        assert payload["approval"]["body"]["expires_at"] == 1_800_000_010
+
         controller.execute("BEGIN IMMEDIATE")
         try:
-            # The exact approved values survive; only the controller version changes.
-            controller.execute("UPDATE fixture_observation SET generation = generation + 1")
+            # No new candidate bytes are supplied. Expiry also does not require a new generation.
+            # Deletion simulates unavailable authority, not a supported controller write.
+            controller.execute(change, (_subject_key(),))
             monkeypatch.setattr(sqlite3, "connect", traced_connect)
             outcome = worker.submit(_record_fixture_use, database, _SUBJECT, raw)
             assert begin_attempted.wait(timeout=5)
@@ -432,5 +459,42 @@ def test_use_waiting_for_controller_observes_the_new_generation(enrolled, monkey
         finally:
             if controller.in_transaction:
                 controller.execute("ROLLBACK")
-        assert outcome.result(timeout=10) == "FIXTURE_GENERATION_CHANGED"
+        assert outcome.result(timeout=10) == reason
+    assert _observed(database) == ([(token_id, 0)], [])
+
+
+def test_observation_read_error_fails_closed_without_retry_or_cached_use(enrolled, monkeypatch):
+    database, payload, token_id = enrolled
+    raw = _json(payload)
+    assert preview_signed_review(raw).reason == "FIXTURE_SIGNED_REVIEW_MATCH"
+    real_connect = sqlite3.connect
+    with closing(real_connect(database)) as controller:
+        previous = controller.execute(
+            """SELECT context_digest, review_digest, registry_digest
+                 FROM fixture_observation WHERE subject = ? AND available = 1""",
+            (_subject_key(),),
+        ).fetchone()
+    assert previous == _BINDING
+
+    opened = []
+    read_refused = []
+
+    def deny_current_read(action, table, column, _schema, _cause):
+        if action == sqlite3.SQLITE_READ and table == "fixture_observation":
+            read_refused.append(column)
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    def connection_with_unreadable_observation(*args, **kwargs):
+        opened.append(1)
+        connection = real_connect(*args, **kwargs)
+        connection.set_authorizer(deny_current_read)
+        return connection
+
+    with monkeypatch.context() as context:
+        context.setattr(sqlite3, "connect", connection_with_unreadable_observation)
+        assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_STORE_UNCONFIRMED"
+
+    assert len(read_refused) == 1
+    assert len(opened) == 1
     assert _observed(database) == ([(token_id, 0)], [])

@@ -24,10 +24,13 @@ update; a store error is unconfirmed, with no automatic retry.
 The tests check that preview is inert, that state changes and outages after
 preview cannot be ignored, that a new valid fixture tag cannot rebind an
 enrollment, and that exactly one concurrent connection records a receipt. A
-separate lock test holds a controller update open while use starts and checks
-that use refuses the newly committed generation. A failed receipt insert rolls
-back consumption. Uncertain store results require a fresh read-back before any
-conclusion about the fixture receipt.
+lock-ordering test holds a controller update open while use starts. Use refuses
+a newly committed generation, an unchanged generation with a clock at the
+exact expiry second, or a missing current source. An injected SQLite read
+denial on the observation table refuses use despite an earlier good read,
+without retrying. A failed receipt insert rolls back consumption. Uncertain
+store results require a fresh read-back before any conclusion about the
+fixture receipt.
 
 SQLite protects only the rows participating in this transaction. This does not
 prove a live source, establish authentication or true freshness, prevent a
@@ -39,3 +42,23 @@ measured artifacts and reviewer/clock/policy state, a verified end-to-end
 transaction or equivalent fencing, and a separately reviewed reservation and
 reconciliation protocol. The signed preview, legacy approval manager, adapters,
 and merge rules are unchanged.
+
+
+## Smallest staging prerequisite (not implemented)
+
+Select one controller-owned observation and receipt boundary. The controller,
+not the incoming bundle, resolves the subject and obtains its current evidence,
+reviewer and policy state, and an independent UTC time sample. Read these
+after acquiring the admission fence, or revalidate an equivalent versioned
+reservation before recording a receipt. A missing or unreadable source or clock
+must halt; a previous preview or cached valid sample cannot replace it. Ordinary
+forward clock movement need not change the artifact generation, but an
+unreliable clock must not allow use of a stale sample.
+
+Define which instant the expiry cutoff governs before staging. This fixture
+compares a stored synthetic timestamp after taking a write lock; it does not
+measure trusted wall time, the time spent waiting for the lock, or when a
+transaction commits. If expiry must hold at commit, staging needs a guard
+that covers that instant, or a bounded timing guarantee and fail-closed behavior
+when that bound cannot be established. Keep staging inert until this behavior
+and authority provenance can be verified independently.
