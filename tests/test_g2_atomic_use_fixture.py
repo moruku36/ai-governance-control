@@ -3,8 +3,11 @@
 import json
 import sqlite3
 import sys
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from threading import Barrier, Event
 
@@ -65,11 +68,26 @@ CREATE TABLE fixture_receipt (
 """
 
 
-def _record_fixture_use(database: Path, selected_subject: _Subject, raw: bytes) -> str:
+@dataclass(frozen=True)
+class _FixtureReceiptWindow:
+    earliest_utc: int
+    latest_utc: int
+    max_remaining_seconds: int
+
+
+def _record_fixture_use(
+    database: Path,
+    selected_subject: _Subject,
+    raw: bytes,
+    *,
+    observe_receipt_window: Callable[[], _FixtureReceiptWindow | None],
+) -> str:
     """Compare and record one local receipt; selected_subject is controller-owned.
 
     No eligibility or execution result leaves this test helper. The write lock
     covers the observed state and receipt, not real artifacts or external effects.
+    The test controller supplies hypothetical time and duration bounds independently
+    of raw. Application code cannot obtain either bound from SQLite COMMIT.
     """
     subject = _json(selected_subject).decode("ascii")
     try:
@@ -132,12 +150,40 @@ def _record_fixture_use(database: Path, selected_subject: _Subject, raw: bytes) 
                    ) VALUES (?, ?, ?, ?, ?, ?)""",
                 (token_id, subject, current["generation"], *(current[f] for f in _BINDING_FIELDS)),
             )
+            # Rehearse the latest check after staging both writes. A refusal
+            # closes the connection without committing either one.
+            try:
+                window = observe_receipt_window()
+            except OSError:
+                return "FIXTURE_RECEIPT_TIME_UNCONFIRMED"
+            if (
+                type(window) is not _FixtureReceiptWindow
+                or any(
+                    type(value) is not int
+                    for value in (
+                        window.earliest_utc,
+                        window.latest_utc,
+                        window.max_remaining_seconds,
+                    )
+                )
+                or not current["now_at_use"] <= window.earliest_utc <= window.latest_utc
+                or window.max_remaining_seconds <= 0
+            ):
+                return "FIXTURE_RECEIPT_TIME_UNCONFIRMED"
+            if window.latest_utc + window.max_remaining_seconds >= signed["expires_at"]:
+                return "FIXTURE_RECEIPT_TIME_EXPIRED"
             conn.execute("COMMIT")
             return "FIXTURE_USE_RECORDED"
     except sqlite3.Error:
         # No claim about consumption and no retry. Closing rolls back an open
         # transaction; a fresh observer must check the receipt when uncertain.
         return "FIXTURE_STORE_UNCONFIRMED"
+
+
+_use_fixture = partial(
+    _record_fixture_use,
+    observe_receipt_window=lambda: _FixtureReceiptWindow(1_800_000_000, 1_800_000_000, 1),
+)
 
 
 def _subject_key(subject: _Subject = _SUBJECT) -> str:
@@ -211,8 +257,8 @@ def test_preview_is_inert_and_replay_after_reopen_does_not_repeat(enrolled):
         "token_consumed": False,
     }
     assert _observed(database) == ([(token_id, 0)], [])
-    assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_USE_RECORDED"
-    assert _record_fixture_use(database, _SUBJECT, json.dumps(payload, indent=2).encode()) == (
+    assert _use_fixture(database, _SUBJECT, raw) == "FIXTURE_USE_RECORDED"
+    assert _use_fixture(database, _SUBJECT, json.dumps(payload, indent=2).encode()) == (
         "FIXTURE_ALREADY_CONSUMED"
     )
     assert _observed(database) == _recorded(token_id)
@@ -234,7 +280,7 @@ def test_current_controller_state_wins_over_prior_matching_preview(enrolled, fie
     raw = _json(payload)
     assert preview_signed_review(raw).reason == "FIXTURE_SIGNED_REVIEW_MATCH"
     _advance(database, field, value)
-    assert _record_fixture_use(database, _SUBJECT, raw) == reason
+    assert _use_fixture(database, _SUBJECT, raw) == reason
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -242,14 +288,14 @@ def test_current_controller_state_wins_over_prior_matching_preview(enrolled, fie
 def test_controller_clock_must_be_inside_closed_open_validity_window(enrolled, now):
     database, payload, token_id = enrolled
     _controller_sql(database, "UPDATE fixture_observation SET now_at_use = ?", (now,))
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "FIXTURE_USE_TIME_EXPIRED"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "FIXTURE_USE_TIME_EXPIRED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
 def test_token_revocation_does_not_consume(enrolled):
     database, payload, token_id = enrolled
     _controller_sql(database, "UPDATE fixture_approval SET revoked = 1")
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "FIXTURE_REVOKED"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "FIXTURE_REVOKED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -266,7 +312,7 @@ def test_restoring_identical_digests_does_not_restore_the_enrolled_generation(en
             (_subject_key(),),
         ).fetchone()
     assert restored == (3, *_BINDING)
-    assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_GENERATION_CHANGED"
+    assert _use_fixture(database, _SUBJECT, raw) == "FIXTURE_GENERATION_CHANGED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -274,9 +320,9 @@ def test_outage_and_recovery_do_not_revive_old_generation(enrolled):
     database, payload, token_id = enrolled
     raw = _json(payload)
     _advance(database, "available", 0)
-    assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_SOURCE_UNAVAILABLE"
+    assert _use_fixture(database, _SUBJECT, raw) == "FIXTURE_SOURCE_UNAVAILABLE"
     _advance(database, "available", 1)
-    assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_GENERATION_CHANGED"
+    assert _use_fixture(database, _SUBJECT, raw) == "FIXTURE_GENERATION_CHANGED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -288,7 +334,7 @@ def test_controller_cannot_reuse_an_earlier_generation_through_update(enrolled):
             database,
             "UPDATE fixture_observation SET generation = 1, reviewer_active = 1",
         )
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "FIXTURE_REVOKED"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "FIXTURE_REVOKED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -310,8 +356,8 @@ def test_bundle_cannot_choose_source_or_rebind_the_enrolled_subject(enrolled):
            WHERE subject = ?""",
         (_subject_key(_OTHER_SUBJECT), other_digest, _subject_key()),
     )
-    assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_SUBJECT_MISMATCH"
-    assert _record_fixture_use(database, _OTHER_SUBJECT, raw) == "FIXTURE_SUBJECT_MISMATCH"
+    assert _use_fixture(database, _SUBJECT, raw) == "FIXTURE_SUBJECT_MISMATCH"
+    assert _use_fixture(database, _OTHER_SUBJECT, raw) == "FIXTURE_SUBJECT_MISMATCH"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -321,7 +367,7 @@ def test_registered_subject_without_observation_fails_closed(enrolled):
     _controller_sql(
         database, "DELETE FROM fixture_observation WHERE subject = ?", (_subject_key(),)
     )
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "FIXTURE_SOURCE_UNAVAILABLE"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "FIXTURE_SOURCE_UNAVAILABLE"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -334,16 +380,16 @@ def test_enrolled_token_cannot_be_rebound_by_a_new_valid_fixture_tag(enrolled):
     raw = _json(payload)
     assert preview_signed_review(raw).reason == "FIXTURE_SIGNED_REVIEW_MATCH"
     _advance(database, "context_digest", new_digest)
-    assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_ENROLLED_TAG_CHANGED"
+    assert _use_fixture(database, _SUBJECT, raw) == "FIXTURE_ENROLLED_TAG_CHANGED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
 def test_invalid_tag_and_unenrolled_token_do_not_consume(enrolled):
     database, payload, token_id = enrolled
     payload["approval"]["body"]["token_id"] = "fixture:approval:unknown"
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "APPROVAL_TAG_MISMATCH"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "APPROVAL_TAG_MISMATCH"
     _approval_tag(payload)
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "FIXTURE_NOT_ENROLLED"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "FIXTURE_NOT_ENROLLED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
@@ -355,7 +401,7 @@ def test_racing_connections_record_exactly_one_receipt(enrolled):
 
     def race():
         barrier.wait(timeout=5)
-        return _record_fixture_use(database, _SUBJECT, raw)
+        return _use_fixture(database, _SUBJECT, raw)
 
     with ThreadPoolExecutor(max_workers=callers) as workers:
         outcomes = [workers.submit(race) for _ in range(callers)]
@@ -373,13 +419,13 @@ def test_receipt_failure_does_not_leave_a_burned_token_or_untracked_success(enro
         """CREATE TRIGGER fixture_receipt_abort BEFORE INSERT ON fixture_receipt
              BEGIN SELECT RAISE(ABORT, 'synthetic receipt failure'); END""",
     )
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "FIXTURE_STORE_UNCONFIRMED"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "FIXTURE_STORE_UNCONFIRMED"
     assert _observed(database) == ([(token_id, 0)], [])
 
 
 def test_a_missing_store_fails_closed_without_creating_state(tmp_path):
     database = tmp_path / "missing.sqlite"
-    assert _record_fixture_use(database, _SUBJECT, _json(_bundle())) == "FIXTURE_STORE_UNCONFIRMED"
+    assert _use_fixture(database, _SUBJECT, _json(_bundle())) == "FIXTURE_STORE_UNCONFIRMED"
     assert not database.exists()
 
 
@@ -395,7 +441,7 @@ def test_controller_cannot_interleave_a_writer_once_use_time_check_starts(enroll
         return real_preview(raw)
 
     monkeypatch.setattr(sys.modules[__name__], "preview_signed_review", check_write_lock)
-    assert _record_fixture_use(database, _SUBJECT, _json(payload)) == "FIXTURE_USE_RECORDED"
+    assert _use_fixture(database, _SUBJECT, _json(payload)) == "FIXTURE_USE_RECORDED"
     assert _observed(database) == _recorded(token_id)
 
 
@@ -452,7 +498,7 @@ def test_use_observes_the_controller_change_before_recording(enrolled, monkeypat
             # Deletion simulates unavailable authority, not a supported controller write.
             controller.execute(change, (_subject_key(),))
             monkeypatch.setattr(sqlite3, "connect", traced_connect)
-            outcome = worker.submit(_record_fixture_use, database, _SUBJECT, raw)
+            outcome = worker.submit(_use_fixture, database, _SUBJECT, raw)
             assert begin_attempted.wait(timeout=5)
             assert not outcome.done()
             controller.execute("COMMIT")
@@ -493,8 +539,100 @@ def test_observation_read_error_fails_closed_without_retry_or_cached_use(enrolle
 
     with monkeypatch.context() as context:
         context.setattr(sqlite3, "connect", connection_with_unreadable_observation)
-        assert _record_fixture_use(database, _SUBJECT, raw) == "FIXTURE_STORE_UNCONFIRMED"
+        assert _use_fixture(database, _SUBJECT, raw) == "FIXTURE_STORE_UNCONFIRMED"
 
     assert len(read_refused) == 1
     assert len(opened) == 1
     assert _observed(database) == ([(token_id, 0)], [])
+
+
+@pytest.mark.parametrize(
+    "sample,reason",
+    [
+        (_FixtureReceiptWindow(1_800_000_007, 1_800_000_008, 1), "FIXTURE_USE_RECORDED"),
+        (_FixtureReceiptWindow(1_800_000_008, 1_800_000_009, 1), "FIXTURE_RECEIPT_TIME_EXPIRED"),
+        (_FixtureReceiptWindow(1_800_000_010, 1_800_000_010, 1), "FIXTURE_RECEIPT_TIME_EXPIRED"),
+        (None, "FIXTURE_RECEIPT_TIME_UNCONFIRMED"),
+        (OSError("synthetic clock source unavailable"), "FIXTURE_RECEIPT_TIME_UNCONFIRMED"),
+        (
+            _FixtureReceiptWindow(1_800_000_003, 1_800_000_002, 1),
+            "FIXTURE_RECEIPT_TIME_UNCONFIRMED",
+        ),
+        (
+            _FixtureReceiptWindow(1_799_999_999, 1_800_000_000, 1),
+            "FIXTURE_RECEIPT_TIME_UNCONFIRMED",
+        ),
+        (
+            _FixtureReceiptWindow(1_800_000_007, 1_800_000_008, 0),
+            "FIXTURE_RECEIPT_TIME_UNCONFIRMED",
+        ),
+        (
+            _FixtureReceiptWindow(1_800_000_007, 1_800_000_008, True),
+            "FIXTURE_RECEIPT_TIME_UNCONFIRMED",
+        ),
+    ],
+    ids=[
+        "latest-durable-second-before-expiry",
+        "uncertainty-and-remaining-time-reach-expiry",
+        "fresh-sample-at-expiry",
+        "missing-window",
+        "source-error",
+        "inverted-window",
+        "possible-backward-step",
+        "no-positive-commit-bound",
+        "invalid-boolean-bound",
+    ],
+)
+def test_receipt_expiry_requires_a_fresh_bounded_window_after_staging(
+    enrolled, monkeypatch, sample, reason
+):
+    database, payload, token_id = enrolled
+    raw = _json(payload)
+    assert preview_signed_review(raw).reason == "FIXTURE_SIGNED_REVIEW_MATCH"
+    assert payload["approval"]["body"]["expires_at"] == 1_800_000_010
+    assert _observed(database) == ([(token_id, 0)], [])
+    real_connect = sqlite3.connect
+    events = []
+
+    def trace(statement):
+        for prefix in (
+            "BEGIN IMMEDIATE",
+            "UPDATE fixture_approval",
+            "INSERT INTO fixture_receipt",
+            "COMMIT",
+        ):
+            if statement.startswith(prefix):
+                events.append(prefix)
+
+    def traced_connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        connection.set_trace_callback(trace)
+        return connection
+
+    def observe_receipt_window():
+        events.append("controller clock")
+        if isinstance(sample, OSError):
+            raise sample
+        return sample
+
+    with monkeypatch.context() as context:
+        context.setattr(sqlite3, "connect", traced_connect)
+        assert (
+            _record_fixture_use(
+                database, _SUBJECT, raw, observe_receipt_window=observe_receipt_window
+            )
+            == reason
+        )
+
+    expected = [
+        "BEGIN IMMEDIATE",
+        "UPDATE fixture_approval",
+        "INSERT INTO fixture_receipt",
+        "controller clock",
+    ]
+    if reason == "FIXTURE_USE_RECORDED":
+        assert events == [*expected, "COMMIT"]
+        assert _observed(database) == _recorded(token_id)
+    else:
+        assert events == expected  # No second window read, commit attempt, or retry.
+        assert _observed(database) == ([(token_id, 0)], [])

@@ -44,7 +44,7 @@ reconciliation protocol. The signed preview, legacy approval manager, adapters,
 and merge rules are unchanged.
 
 
-## Smallest staging prerequisite (not implemented)
+## Proposed staging expiry boundary (not implemented)
 
 Select one controller-owned observation and receipt boundary. The controller,
 not the incoming bundle, resolves the subject and obtains its current evidence,
@@ -55,10 +55,27 @@ must halt; a previous preview or cached valid sample cannot replace it. Ordinary
 forward clock movement need not change the artifact generation, but an
 unreliable clock must not allow use of a stale sample.
 
-Define which instant the expiry cutoff governs before staging. This fixture
-compares a stored synthetic timestamp after taking a write lock; it does not
-measure trusted wall time, the time spent waiting for the lock, or when a
-transaction commits. If expiry must hold at commit, staging needs a guard
-that covers that instant, or a bounded timing guarantee and fail-closed behavior
-when that bound cannot be established. Keep staging inert until this behavior
-and authority provenance can be verified independently.
+For the inert receipt, the cutoff should govern the instant the transaction
+becomes durable, not when the request arrives, acquires the fence, first passes
+validation, or calls `COMMIT`. The validity interval is `[issued_at, expires_at)`;
+durability at the exact expiry instant is too late. This cutoff does not authorize
+an external effect, which has its own admission and reconciliation requirements.
+
+The rehearsal first compares a stored synthetic timestamp after taking the write
+lock. After both writes are staged, it also asks the fixture controller for a
+*synthetic* UTC interval `[earliest, latest]` and a positive upper bound on the
+remaining time to durability from that sample. It commits the fixture rows only
+when `latest + remaining_bound < expires_at`. The earlier reading cannot stand
+in for the required final interval. Missing, unreadable, invalid or potentially
+backward intervals and missing bounds leave both rows unchanged. Tests trace that
+the final check happens after both statements and refusals never attempt `COMMIT`.
+
+That final check is not an actual commit-time guard. The real controller would
+need a storage boundary that can enforce the deadline at durable commit, or
+independent guarantees for both the UTC interval and the complete sample-to-
+durability delay, including scheduling, lock waits and storage flushes. A timer,
+busy timeout, previous good sample or post-commit check is not such a guarantee.
+Clock source loss, rollback or unverified recovery must make the guard refuse.
+The SQLite fixture supplies its hypothetical bound; it neither measures nor
+guarantees the sample-to-durability delay. Keep staging inert until the clock
+and storage guarantees can be independently verified.
